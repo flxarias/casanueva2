@@ -73,7 +73,7 @@ def append_to_approved(data_dict):
     try:
         headers = ws.row_values(1)
         if not headers:
-            headers = ["ID", "Tipo_Propiedad", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
+            headers = ["ID", "Tipo_Propiedad", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Planta", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
             ws.append_row(headers)
         new_row = [data_dict.get(h, "") for h in headers]
         ws.append_row(new_row)
@@ -161,13 +161,6 @@ def main():
                             text_lines = soup.get_text(separator='\n').split('\n')
                             clean_text = '\n'.join([line.strip() for line in text_lines if line.strip()])
                             
-                            # Habitaciones
-                            habs_match = re.search(r'(?:Habitaciones|Dormitorios)\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
-                            if not habs_match:
-                                habs_match = re.search(r'(\d+)\s*(?:Habitaciones|Dormitorios)', clean_text, re.IGNORECASE)
-                            habs = int(habs_match.group(1)) if habs_match else 0
-                            
-                            # Baños
                             banos_match = re.search(r'Baños\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
                             if not banos_match:
                                 banos_match = re.search(r'(\d+)\s*Baños', clean_text, re.IGNORECASE)
@@ -214,6 +207,7 @@ def main():
                             st.session_state['ext_metros'] = metros
                             st.session_state['ext_habs'] = habs
                             st.session_state['ext_banos'] = banos
+                            st.session_state['ext_planta'] = planta
                             st.session_state['ext_terraza'] = tiene_terraza
                             st.session_state['ext_terraza_m2'] = terraza_m2
                             st.session_state['ext_ascensor'] = tiene_ascensor
@@ -248,8 +242,9 @@ def main():
                     metros = st.number_input("Metros Cuadrados *", min_value=0, step=5, value=st.session_state.get('ext_metros', 0))
                     habitaciones = st.number_input("Habitaciones", min_value=0, step=1, value=st.session_state.get('ext_habs', 0))
                     banos = st.number_input("Baños", min_value=0, step=1, value=st.session_state.get('ext_banos', 0))
+                    planta = st.text_input("Planta (Bajo, 1º...)", value=st.session_state.get('ext_planta', ''))
                 with col2:
-                    antiguedad = st.number_input("Antigüedad (Año)", min_value=0, max_value=2030, step=1, value=0, help="0 si es desconocido")
+                    antiguedad = st.number_input("Antigüedad (Año)", min_value=1800, max_value=2030, step=1, value=None, placeholder="Ej: 1995")
                     ubicacion = st.selectbox("Ubicación", ["Centro", "Raval", "Altabix", "Carrús", "Sector 5", "Otro"])
                     origen_idx = origen_opts.index(default_origen) if default_origen in origen_opts else 2
                     origen = st.selectbox("Origen", origen_opts, index=origen_idx)
@@ -273,7 +268,7 @@ def main():
                             "ID": f"MAN_{uuid.uuid4().hex[:8]}", "Tipo_Propiedad": "Piso",
                             "Fecha_Extraccion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "Origen": origen, "URL": url, "Titulo": titulo, "Precio": precio, "Ubicacion": ubicacion,
-                            "Metros": metros, "Habitaciones": habitaciones, "Baños": banos, "Antigüedad": antiguedad if antiguedad > 0 else "",
+                            "Metros": metros, "Habitaciones": habitaciones, "Baños": banos, "Planta": planta, "Antigüedad": antiguedad if antiguedad else "",
                             "Ascensor": "Sí" if ascensor else "No", "Garaje": "Sí" if garaje else "No", "Piscina": "Sí" if piscina else "No",
                             "Terraza": "Sí" if terraza else "No", "Terraza_Metros": terraza_m2 if terraza_m2 > 0 else "",
                             "Caracteristicas": caracteristicas, "Notas": notas, "Imagen": ""
@@ -281,7 +276,7 @@ def main():
                         if append_to_approved(new_data):
                             st.success("Piso guardado exitosamente.")
                             st.balloons()
-                            for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_garaje', 'ext_piscina', 'ext_origen', 'ext_url', 'ext_tipo']:
+                            for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_planta', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_garaje', 'ext_piscina', 'ext_origen', 'ext_url', 'ext_tipo']:
                                 if k in st.session_state: del st.session_state[k]
                         else: st.error("❌ Error guardando.")
 
@@ -310,7 +305,7 @@ def main():
                             "ID": f"MAN_{uuid.uuid4().hex[:8]}", "Tipo_Propiedad": "Terreno",
                             "Fecha_Extraccion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "Origen": origen_t, "URL": url_t, "Titulo": titulo_t, "Precio": precio_t, "Ubicacion": ubicacion_t,
-                            "Metros": metros_t, "Habitaciones": "", "Baños": "", "Antigüedad": "",
+                            "Metros": metros_t, "Habitaciones": "", "Baños": "", "Planta": "", "Antigüedad": "",
                             "Ascensor": "", "Garaje": "", "Piscina": "",
                             "Terraza": "", "Terraza_Metros": "",
                             "Caracteristicas": caracteristicas_t, "Notas": notas_t, "Imagen": ""
@@ -318,7 +313,7 @@ def main():
                         if append_to_approved(new_data):
                             st.success("Terreno guardado exitosamente.")
                             st.balloons()
-                            for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_garaje', 'ext_piscina', 'ext_origen', 'ext_url', 'ext_tipo']:
+                            for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_planta', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_garaje', 'ext_piscina', 'ext_origen', 'ext_url', 'ext_tipo']:
                                 if k in st.session_state: del st.session_state[k]
                         else: st.error("❌ Error guardando. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")
 

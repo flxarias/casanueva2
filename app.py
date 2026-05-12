@@ -10,7 +10,7 @@ from datetime import datetime
 st.set_page_config(page_title="Gestor Inmobiliario Elche", page_icon="🏠", layout="wide")
 
 # --- DATABASE FUNCTIONS ---
-@st.cache_resource(ttl=60)
+@st.cache_data(ttl=60)
 def load_data(sheet_name):
     """Carga datos de una pestaña específica con cache."""
     sheet = get_google_sheet()
@@ -45,6 +45,7 @@ def move_row(row_data, from_sheet_name, to_sheet_name):
         
         # Eliminar de from_ws
         from_ws.delete_rows(row_idx)
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Error moviendo fila: {e}")
@@ -58,6 +59,7 @@ def delete_row(row_id, sheet_name):
     try:
         cell = ws.find(row_id)
         ws.delete_rows(cell.row)
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Error eliminando fila: {e}")
@@ -75,6 +77,7 @@ def append_to_approved(data_dict):
             ws.append_row(headers)
         new_row = [data_dict.get(h, "") for h in headers]
         ws.append_row(new_row)
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Error guardando manual: {e}")
@@ -133,9 +136,42 @@ def main():
         st.title("✍️ Entrada Manual y Semiautomática")
         
         st.subheader("Extracción por URL (BETA)")
-        url_input = st.text_input("Introduce URL de Idealista o Fotocasa")
+        url_input = st.text_input("Introduce URL de Idealista, Fotocasa o de Agencia")
         if st.button("Extraer Datos"):
-            st.warning("La extracción en vivo está limitada por los anti-bots de los portales. Por favor, rellena los datos manualmente por ahora.")
+            if not url_input:
+                st.warning("Por favor, introduce una URL.")
+            else:
+                with st.spinner("Intentando extraer..."):
+                    import requests
+                    from bs4 import BeautifulSoup
+                    import re
+                    try:
+                        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                        res = requests.get(url_input, headers=headers, timeout=10)
+                        if res.status_code == 403:
+                            st.error("❌ El portal ha bloqueado la conexión (Sistema Anti-bots). Idealista y Fotocasa requieren proxies para la extracción en vivo.")
+                        elif res.status_code == 200:
+                            soup = BeautifulSoup(res.text, 'html.parser')
+                            title = soup.title.string if soup.title else "Anuncio Extraído"
+                            
+                            # Buscar posibles precios en el texto
+                            text = soup.get_text()
+                            precios = re.findall(r'(\d{2,3}[\.,]?\d{3})\s*[€|euros]', text, re.IGNORECASE)
+                            precio_est = 0
+                            if precios:
+                                try:
+                                    precio_est = int(precios[0].replace('.', '').replace(',', ''))
+                                except:
+                                    pass
+                                    
+                            st.session_state['ext_titulo'] = title.strip()[:100]
+                            st.session_state['ext_precio'] = precio_est
+                            st.session_state['ext_url'] = url_input
+                            st.success("✅ Algunos datos extraídos. Por favor, revisa el formulario abajo.")
+                        else:
+                            st.warning(f"⚠️ El servidor devolvió el código {res.status_code}")
+                    except Exception as e:
+                        st.error(f"Error de conexión: {e}")
             
         st.divider()
         st.subheader("Formulario Manual")
@@ -143,14 +179,14 @@ def main():
         with st.form("manual_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
-                titulo = st.text_input("Título del Anuncio *")
-                precio = st.number_input("Precio (€) *", min_value=0, step=1000)
+                titulo = st.text_input("Título del Anuncio *", value=st.session_state.get('ext_titulo', ''))
+                precio = st.number_input("Precio (€) *", min_value=0, step=1000, value=st.session_state.get('ext_precio', 0))
                 metros = st.number_input("Metros Cuadrados *", min_value=0, step=5)
                 habitaciones = st.number_input("Habitaciones", min_value=0, step=1)
             with col2:
                 ubicacion = st.selectbox("Ubicación", ["Centro", "Raval", "Altabix", "Carrús", "Sector 5", "Otro"])
                 origen = st.selectbox("Origen", ["Idealista", "Fotocasa", "Agencia Local", "Offline", "Otro"])
-                url = st.text_input("URL del Anuncio")
+                url = st.text_input("URL del Anuncio", value=st.session_state.get('ext_url', ''))
                 caracteristicas = st.text_area("Características (ej. Terraza, Ascensor)")
             
             submit = st.form_submit_button("Guardar Propiedad")
@@ -175,6 +211,10 @@ def main():
                     if append_to_approved(new_data):
                         st.success("Propiedad guardada exitosamente en la base de datos.")
                         st.balloons()
+                        # Limpiar variables de sesion
+                        if 'ext_titulo' in st.session_state: del st.session_state['ext_titulo']
+                        if 'ext_precio' in st.session_state: del st.session_state['ext_precio']
+                        if 'ext_url' in st.session_state: del st.session_state['ext_url']
 
     elif choice == "Base de Datos y Análisis":
         st.title("📊 Base de Datos y Análisis")

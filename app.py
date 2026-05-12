@@ -208,50 +208,24 @@ def main():
                             import urllib.parse
                             domain = urllib.parse.urlparse(url_input).netloc.replace('www.', '').split('.')[0].capitalize()
                             
-                            # Extraer texto limpio
                             text_lines = soup.get_text(separator='\n').split('\n')
                             clean_text = '\n'.join([line.strip() for line in text_lines if line.strip()])
                             
-                            banos_match = re.search(r'Baños\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
-                            if not banos_match:
-                                banos_match = re.search(r'(\d+)\s*Baños', clean_text, re.IGNORECASE)
-                            banos = int(banos_match.group(1)) if banos_match else 0
-
-                            # Metros
-                            metros_match = re.search(r'(?:Útiles|Construidos|Superficie)\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
-                            if not metros_match:
-                                metros_match = re.search(r'(\d+)\s*m[2²]', clean_text, re.IGNORECASE)
-                            metros = int(metros_match.group(1)) if metros_match else 0
+                            from scraper import parse_property_data
+                            prop_data = parse_property_data(url_input, title, clean_text, domain)
                             
-                            # Terraza
-                            terraza_match = re.search(r'Terraza\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
-                            terraza_m2 = int(terraza_match.group(1)) if terraza_match else 0
-                            tiene_terraza = True if terraza_m2 > 0 or re.search(r'\bTerraza\b', clean_text, re.IGNORECASE) else False
-
-                            # Ascensor, Garaje, Piscina
-                            tiene_ascensor = bool(re.search(r'\bAscensor\b', clean_text, re.IGNORECASE))
-                            tiene_garaje = bool(re.search(r'\b(?:Garaje|Parking|Aparcamiento)\b', clean_text, re.IGNORECASE))
-                            tiene_piscina = bool(re.search(r'\bPiscina\b', clean_text, re.IGNORECASE))
-                            
-                            # Tipo de Propiedad Guess
-                            tipo_prop = "Piso"
-                            if re.search(r'\b(?:Terreno|Parcela|Solar|Ruina|Finca|Chalet)\b', title + " " + clean_text, re.IGNORECASE):
-                                tipo_prop = "Terreno"
-                            
-                            # Precio
-                            precio_est = 0
-                            precio_match = re.search(r'Precio\s*[:\n]\s*(\d{1,3}[\.,]?\d{3})', clean_text, re.IGNORECASE)
-                            if precio_match:
-                                try: precio_est = int(precio_match.group(1).replace('.', '').replace(',', ''))
-                                except: pass
-                            else:
-                                precios = re.findall(r'(\d{2,3}[\.,]?\d{3})\s*[€|euros]', clean_text, re.IGNORECASE)
-                                if precios:
-                                    try: precio_est = int(precios[0].replace('.', '').replace(',', ''))
-                                    except: pass
-                                    
-                            # Título limpio
-                            if "|" in title: title = title.split("|")[0].strip()
+                            habs = prop_data['Habitaciones'] if prop_data['Habitaciones'] else 0
+                            banos = prop_data['Baños'] if prop_data['Baños'] else 0
+                            planta = prop_data['Planta']
+                            metros = prop_data['Metros']
+                            precio_est = prop_data['Precio']
+                            tiene_terraza = True if prop_data['Terraza'] == "Sí" else False
+                            terraza_m2 = prop_data['Terraza_Metros'] if prop_data['Terraza_Metros'] else 0
+                            tiene_ascensor = True if prop_data['Ascensor'] == "Sí" else False
+                            tiene_garaje = True if prop_data['Garaje'] == "Sí" else False
+                            tiene_piscina = True if prop_data['Piscina'] == "Sí" else False
+                            tipo_prop = prop_data['Tipo_Propiedad']
+                            title = prop_data['Titulo']
                                     
                             st.session_state['ext_titulo'] = title.strip()[:100]
                             st.session_state['ext_precio'] = precio_est

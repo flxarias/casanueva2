@@ -8,6 +8,7 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
+import uuid
 
 # Load environment variables (for local testing)
 load_dotenv()

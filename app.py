@@ -400,7 +400,7 @@ def main():
                 
                 st.divider()
                 st.markdown("### 📋 Directorio de Activos")
-                st.dataframe(df_mostrar, use_container_width=True, height=300)
+                st.dataframe(df_mostrar.astype(str), use_container_width=True, height=300)
                 
                 # Botones de acción alineados
                 col_btn1, col_btn2 = st.columns([1, 4])

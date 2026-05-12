@@ -59,7 +59,7 @@ def get_google_sheet():
         except: pass
         return None
 
-NEW_HEADERS = ["ID", "Tipo_Propiedad", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
+NEW_HEADERS = ["ID", "Tipo_Propiedad", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Planta", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
 
 def ensure_worksheets(sheet):
     """Asegura que las pestañas necesarias existen."""
@@ -93,19 +93,20 @@ import re
 def parse_property_data(url, title, clean_text, domain, price_override=0):
     """Lógica genérica de extracción basada en Regex (similar a app.py)"""
     metros = 0
-    metros_match = re.search(r'(\d{2,4})\s*m2', clean_text, re.IGNORECASE)
+    metros_match = re.search(r'(\d{2,4})\s*(?:m2|m²|metros)', clean_text, re.IGNORECASE)
     if metros_match: metros = int(metros_match.group(1))
-    else:
-        m_match = re.search(r'(\d{2,4})\s*metros', clean_text, re.IGNORECASE)
-        if m_match: metros = int(m_match.group(1))
 
     habs = 0
-    habs_match = re.search(r'(\d)\s*(?:hab|dormitorio|habitacion)', clean_text, re.IGNORECASE)
+    habs_match = re.search(r'(\d+)\s*(?:hab|dormitorio|habitacion)', clean_text, re.IGNORECASE)
     if habs_match: habs = int(habs_match.group(1))
 
     banos = 0
-    banos_match = re.search(r'(\d)\s*(?:baño|aseo)', clean_text, re.IGNORECASE)
+    banos_match = re.search(r'(\d+)\s*(?:baño|aseo)', clean_text, re.IGNORECASE)
     if banos_match: banos = int(banos_match.group(1))
+    
+    planta = ""
+    planta_match = re.search(r'((?:Bajo|Entresuelo|Ático|Atico|\d{1,2}ª|\d{1,2}º)\s*planta|Bajo|Entresuelo|Ático|Atico)', clean_text, re.IGNORECASE)
+    if planta_match: planta = planta_match.group(1).capitalize()
 
     tiene_ascensor = "Sí" if re.search(r'\bAscensor\b', clean_text, re.IGNORECASE) else "No"
     tiene_garaje = "Sí" if re.search(r'\b(?:Garaje|Parking|Aparcamiento)\b', clean_text, re.IGNORECASE) else "No"
@@ -146,6 +147,7 @@ def parse_property_data(url, title, clean_text, domain, price_override=0):
         "Metros": metros,
         "Habitaciones": habs if habs > 0 else "",
         "Baños": banos if banos > 0 else "",
+        "Planta": planta,
         "Antigüedad": "",
         "Ascensor": tiene_ascensor,
         "Garaje": tiene_garaje,

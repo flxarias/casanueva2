@@ -215,6 +215,8 @@ def main():
                         if 'ext_titulo' in st.session_state: del st.session_state['ext_titulo']
                         if 'ext_precio' in st.session_state: del st.session_state['ext_precio']
                         if 'ext_url' in st.session_state: del st.session_state['ext_url']
+                    else:
+                        st.error("❌ No se pudo guardar la propiedad. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")
 
     elif choice == "Base de Datos y Análisis":
         st.title("📊 Base de Datos y Análisis")

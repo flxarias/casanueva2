@@ -49,6 +49,7 @@ def get_google_sheet():
         credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         client = gspread.authorize(credentials)
         sheet = client.open_by_url(sheet_url)
+        ensure_worksheets(sheet)
         return sheet
     except Exception as e:
         print(f"Error conectando a Google Sheets: {e}")

@@ -256,9 +256,9 @@ def main():
         if default_origen and default_origen not in origen_opts:
             origen_opts.insert(0, default_origen)
         
-        tab_piso, tab_terreno = st.tabs(["🏢 Piso Centro", "🏞️ Terreno / Ruina"])
+        tipo_form = st.radio("Selecciona el tipo de formulario a rellenar:", ["🏢 Piso Centro", "🏞️ Terreno / Ruina"], index=0 if st.session_state.get('ext_tipo') != 'Terreno' else 1, horizontal=True)
         
-        with tab_piso:
+        if tipo_form == "🏢 Piso Centro":
             with st.form("manual_form_piso", clear_on_submit=True):
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -305,7 +305,7 @@ def main():
                                 if k in st.session_state: del st.session_state[k]
                         else: st.error("❌ Error guardando.")
 
-        with tab_terreno:
+        elif tipo_form == "🏞️ Terreno / Ruina":
             with st.form("manual_form_terreno", clear_on_submit=True):
                 col1, col2 = st.columns(2)
                 with col1:

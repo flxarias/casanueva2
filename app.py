@@ -154,18 +154,41 @@ def main():
                             soup = BeautifulSoup(res.text, 'html.parser')
                             title = soup.title.string if soup.title else "Anuncio Extraído"
                             
-                            # Buscar posibles precios en el texto
-                            text = soup.get_text()
-                            precios = re.findall(r'(\d{2,3}[\.,]?\d{3})\s*[€|euros]', text, re.IGNORECASE)
+                            # Extraer texto limpio
+                            text_lines = soup.get_text(separator='\n').split('\n')
+                            clean_text = '\n'.join([line.strip() for line in text_lines if line.strip()])
+                            
+                            # Habitaciones
+                            habs_match = re.search(r'Habitaciones\s*:\s*(\d+)', clean_text, re.IGNORECASE)
+                            if not habs_match:
+                                habs_match = re.search(r'(\d+)\s*Habitaciones', clean_text, re.IGNORECASE)
+                            habs = int(habs_match.group(1)) if habs_match else 0
+                            
+                            # Metros
+                            metros_match = re.search(r'(?:Útiles|Construidos|Superficie)\s*:\s*(\d+)', clean_text, re.IGNORECASE)
+                            if not metros_match:
+                                metros_match = re.search(r'(\d+)\s*m[2²]', clean_text, re.IGNORECASE)
+                            metros = int(metros_match.group(1)) if metros_match else 0
+                            
+                            # Precio
                             precio_est = 0
-                            if precios:
-                                try:
-                                    precio_est = int(precios[0].replace('.', '').replace(',', ''))
-                                except:
-                                    pass
+                            precio_match = re.search(r'Precio\s*:\s*(\d{1,3}[\.,]?\d{3})', clean_text, re.IGNORECASE)
+                            if precio_match:
+                                try: precio_est = int(precio_match.group(1).replace('.', '').replace(',', ''))
+                                except: pass
+                            else:
+                                precios = re.findall(r'(\d{2,3}[\.,]?\d{3})\s*[€|euros]', clean_text, re.IGNORECASE)
+                                if precios:
+                                    try: precio_est = int(precios[0].replace('.', '').replace(',', ''))
+                                    except: pass
+                                    
+                            # Título limpio
+                            if "|" in title: title = title.split("|")[0].strip()
                                     
                             st.session_state['ext_titulo'] = title.strip()[:100]
                             st.session_state['ext_precio'] = precio_est
+                            st.session_state['ext_metros'] = metros
+                            st.session_state['ext_habs'] = habs
                             st.session_state['ext_url'] = url_input
                             st.success("✅ Algunos datos extraídos. Por favor, revisa el formulario abajo.")
                         else:
@@ -181,8 +204,8 @@ def main():
             with col1:
                 titulo = st.text_input("Título del Anuncio *", value=st.session_state.get('ext_titulo', ''))
                 precio = st.number_input("Precio (€) *", min_value=0, step=1000, value=st.session_state.get('ext_precio', 0))
-                metros = st.number_input("Metros Cuadrados *", min_value=0, step=5)
-                habitaciones = st.number_input("Habitaciones", min_value=0, step=1)
+                metros = st.number_input("Metros Cuadrados *", min_value=0, step=5, value=st.session_state.get('ext_metros', 0))
+                habitaciones = st.number_input("Habitaciones", min_value=0, step=1, value=st.session_state.get('ext_habs', 0))
             with col2:
                 ubicacion = st.selectbox("Ubicación", ["Centro", "Raval", "Altabix", "Carrús", "Sector 5", "Otro"])
                 origen = st.selectbox("Origen", ["Idealista", "Fotocasa", "Agencia Local", "Offline", "Otro"])
@@ -214,6 +237,8 @@ def main():
                         # Limpiar variables de sesion
                         if 'ext_titulo' in st.session_state: del st.session_state['ext_titulo']
                         if 'ext_precio' in st.session_state: del st.session_state['ext_precio']
+                        if 'ext_metros' in st.session_state: del st.session_state['ext_metros']
+                        if 'ext_habs' in st.session_state: del st.session_state['ext_habs']
                         if 'ext_url' in st.session_state: del st.session_state['ext_url']
                     else:
                         st.error("❌ No se pudo guardar la propiedad. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")

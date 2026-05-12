@@ -6,8 +6,44 @@ import uuid
 import os
 from scraper import get_google_sheet, ensure_worksheets
 from datetime import datetime
+from streamlit_option_menu import option_menu
 
 st.set_page_config(page_title="Gestor Inmobiliario Elche", page_icon="🏠", layout="wide")
+
+# --- ESTILOS PREMIUM ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+    
+    /* Tipografía Global */
+    html, body, [class*="css"]  {
+        font-family: 'Inter', sans-serif !important;
+    }
+    
+    /* Aumentar legibilidad en formularios */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>select {
+        font-size: 16px !important;
+    }
+    
+    /* Tarjetas para Métricas */
+    div[data-testid="stMetric"] {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 15px 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    }
+    
+    /* Estilos para el contenedor principal de métricas personalizadas si las usamos */
+    .premium-card {
+        background-color: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # --- DATABASE FUNCTIONS ---
 @st.cache_data(ttl=60)
@@ -85,17 +121,31 @@ def append_to_approved(data_dict):
 
 # --- UI COMPONENTS ---
 def main():
-    st.sidebar.title("🏠 Menú Inmobiliario")
-    menu = ["Validación Diaria", "Entrada Manual", "Base de Datos y Análisis", "Simulador y Comparador"]
-    choice = st.sidebar.radio("Navegación", menu)
+    with st.sidebar:
+        st.markdown("<h2 style='text-align: center; color: #1e3a8a; font-weight: 800;'>🏠 Gestor Elche</h2>", unsafe_allow_html=True)
+        choice = option_menu(
+            menu_title=None,
+            options=["Validación Diaria", "Entrada Manual", "Base de Datos", "Simulador"],
+            icons=["inbox-fill", "pencil-square", "bar-chart-fill", "calculator-fill"],
+            menu_icon="cast",
+            default_index=2,
+            styles={
+                "container": {"padding": "0!important", "background-color": "transparent"},
+                "icon": {"color": "#3b82f6", "font-size": "18px"}, 
+                "nav-link": {"font-size": "16px", "text-align": "left", "margin":"5px", "--hover-color": "#e0f2fe"},
+                "nav-link-selected": {"background-color": "#1e3a8a", "color": "white", "font-weight": "600"},
+            }
+        )
+        st.divider()
     
     # Comprobar conexión DB al inicio
     if not os.environ.get("GOOGLE_CREDENTIALS_JSON"):
          st.sidebar.error("Faltan Credenciales de Google (Secretos)")
 
     if choice == "Validación Diaria":
-        st.title("✅ Validación Diaria (07:00)")
-        st.write("Propiedades preseleccionadas por el sistema automático.")
+        st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>✅ Validación Diaria</h1>", unsafe_allow_html=True)
+        st.markdown("Revisa las propiedades preseleccionadas por el sistema automático y decide si las apruebas para la base de datos.")
+        st.divider()
         
         df_pre = load_data("Preselection")
         
@@ -133,8 +183,9 @@ def main():
                     st.divider()
 
     elif choice == "Entrada Manual":
-        st.title("✍️ Entrada Manual y Semiautomática")
-        
+        st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>✍️ Entrada Manual</h1>", unsafe_allow_html=True)
+        st.markdown("Añade una propiedad o pega una URL para auto-completar los datos.")
+        st.divider()
         st.subheader("Extracción por URL (BETA)")
         url_input = st.text_input("Introduce URL de Idealista, Fotocasa o de Agencia")
         if st.button("Extraer Datos"):
@@ -317,8 +368,10 @@ def main():
                                 if k in st.session_state: del st.session_state[k]
                         else: st.error("❌ Error guardando. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")
 
-    elif choice == "Base de Datos y Análisis":
-        st.title("📊 Base de Datos y Análisis")
+    elif choice == "Base de Datos":
+        st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>📊 Base de Datos y Análisis</h1>", unsafe_allow_html=True)
+        st.markdown("Analiza el mercado inmobiliario de Elche con datos en tiempo real.")
+        st.divider()
         
         df_app = load_data("Approved")
         
@@ -328,7 +381,7 @@ def main():
             if 'Tipo_Propiedad' not in df_app.columns:
                 df_app['Tipo_Propiedad'] = "Piso" # Fallback datos antiguos
                 
-            tipo_filtro = st.radio("Filtrar por tipo:", ["Todos", "Pisos", "Terrenos"], horizontal=True)
+            tipo_filtro = st.radio("Filtro de Activo:", ["Todos", "Pisos", "Terrenos"], horizontal=True)
             
             if tipo_filtro == "Pisos":
                 df_mostrar = df_app[df_app['Tipo_Propiedad'] == 'Piso'].copy()
@@ -345,45 +398,54 @@ def main():
                 df_mostrar['Metros'] = pd.to_numeric(df_mostrar['Metros'], errors='coerce')
                 df_mostrar['Precio_m2'] = df_mostrar['Precio'] / df_mostrar['Metros']
                 
-                st.subheader("Métricas Clave")
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Propiedades", len(df_mostrar))
-                col2.metric("Precio Medio", f"€{df_mostrar['Precio'].mean():,.2f}")
-                col3.metric("Precio Medio / m²", f"€{df_mostrar['Precio_m2'].mean():,.2f}")
-                
-                st.subheader("Tabla de Datos")
-                st.dataframe(df_mostrar, use_container_width=True)
-                
-                # Botón de descarga
-                csv = df_mostrar.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Descargar datos como CSV",
-                    data=csv,
-                    file_name=f'propiedades_{tipo_filtro.lower()}.csv',
-                    mime='text/csv',
-                )
-                
-                # Enlace a Google Sheets
-                sheet_url = os.environ.get("GOOGLE_SHEET_URL", "#")
-                st.markdown(f"[🔗 Abrir en Google Sheets]({sheet_url})")
+                st.markdown("### ⚡ KPIs del Mercado")
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Propiedades", len(df_mostrar))
+                col2.metric("Precio Medio", f"{df_mostrar['Precio'].mean():,.0f} €".replace(',', '.'))
+                col3.metric("Mediana Precio", f"{df_mostrar['Precio'].median():,.0f} €".replace(',', '.'))
+                col4.metric("Precio/m² Medio", f"{df_mostrar['Precio_m2'].mean():,.0f} €/m²".replace(',', '.'))
                 
                 st.divider()
-                st.subheader("Dashboard Analítico")
+                st.markdown("### 📈 Análisis Visual Avanzado")
                 
                 col_chart1, col_chart2 = st.columns(2)
                 with col_chart1:
-                    # Distribución por ubicación
-                    fig_pie = px.pie(df_mostrar, names='Ubicacion', title='Propiedades por Ubicación', hole=0.3)
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                    # Distribución de Precios (Histograma)
+                    fig_hist = px.histogram(df_mostrar, x="Precio", nbins=20, 
+                                            title="Distribución de Precios", 
+                                            color_discrete_sequence=['#3b82f6'])
+                    fig_hist.update_layout(bargap=0.1, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_hist, use_container_width=True)
                     
                 with col_chart2:
-                    # Dispersión Precio vs Superficie
-                    fig_scatter = px.scatter(df_mostrar, x='Metros', y='Precio', color='Ubicacion', 
-                                             hover_data=['Titulo'], title='Precio vs Superficie')
-                    st.plotly_chart(fig_scatter, use_container_width=True)
-
-    elif choice == "Simulador y Comparador":
-        st.title("🧮 Simulador y Comparador")
+                    # Boxplot por Ubicación para ver dispersión y outliers
+                    fig_box = px.box(df_mostrar, x="Ubicacion", y="Precio_m2", 
+                                     title="Precio/m² por Zona (Boxplot)", color="Ubicacion")
+                    fig_box.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False)
+                    st.plotly_chart(fig_box, use_container_width=True)
+                
+                st.divider()
+                st.markdown("### 📋 Directorio de Activos")
+                st.dataframe(df_mostrar, use_container_width=True, height=300)
+                
+                # Botones de acción alineados
+                col_btn1, col_btn2 = st.columns([1, 4])
+                with col_btn1:
+                    csv = df_mostrar.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Exportar CSV",
+                        data=csv,
+                        file_name=f'propiedades_{tipo_filtro.lower()}.csv',
+                        mime='text/csv',
+                    )
+                with col_btn2:
+                    sheet_url = os.environ.get("GOOGLE_SHEET_URL", "#")
+                    st.markdown(f"<a href='{sheet_url}' target='_blank' style='display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 0.375rem; text-decoration: none; font-weight: 600;'>🔗 Abrir en Google Sheets</a>", unsafe_allow_html=True)
+                
+    elif choice == "Simulador":
+        st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>🧮 Simulador y Comparador Financiero</h1>", unsafe_allow_html=True)
+        st.markdown("Estima todos los costes ocultos (ITP, Notaría, Reformas) de tus opciones favoritas.")
+        st.divider()
         
         df_app = load_data("Approved")
         

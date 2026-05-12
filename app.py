@@ -230,7 +230,7 @@ def main():
                 habitaciones = st.number_input("Habitaciones", min_value=0, step=1, value=st.session_state.get('ext_habs', 0))
                 banos = st.number_input("Baños", min_value=0, step=1, value=st.session_state.get('ext_banos', 0))
             with col2:
-                antiguedad = st.number_input("Antigüedad (Año)", min_value=1800, max_value=2030, step=1, value=0, help="0 si es desconocido")
+                antiguedad = st.number_input("Antigüedad (Año)", min_value=0, max_value=2030, step=1, value=0, help="0 si es desconocido")
                 ubicacion = st.selectbox("Ubicación", ["Centro", "Raval", "Altabix", "Carrús", "Sector 5", "Otro"])
                 
                 # Autodetect origen logic

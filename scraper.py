@@ -86,103 +86,172 @@ def ensure_worksheets(sheet):
                 print(f"Error comprobando cabeceras en {req}: {e}")
 
 # --- SCRAPING LOGIC ---
-def setup_driver():
-    """Configura y devuelve una instancia de undetected-chromedriver."""
-    import undetected_chromedriver as uc
-    options = uc.ChromeOptions()
-    # options.add_argument('--headless') # Headless a veces dispara más captchas, pero es necesario en CI
-    options.add_argument('--disable-gpu')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
+import requests
+from bs4 import BeautifulSoup
+import re
+
+def parse_property_data(url, title, clean_text, domain, price_override=0):
+    """Lógica genérica de extracción basada en Regex (similar a app.py)"""
+    metros = 0
+    metros_match = re.search(r'(\d{2,4})\s*m2', clean_text, re.IGNORECASE)
+    if metros_match: metros = int(metros_match.group(1))
+    else:
+        m_match = re.search(r'(\d{2,4})\s*metros', clean_text, re.IGNORECASE)
+        if m_match: metros = int(m_match.group(1))
+
+    habs = 0
+    habs_match = re.search(r'(\d)\s*(?:hab|dormitorio|habitacion)', clean_text, re.IGNORECASE)
+    if habs_match: habs = int(habs_match.group(1))
+
+    banos = 0
+    banos_match = re.search(r'(\d)\s*(?:baño|aseo)', clean_text, re.IGNORECASE)
+    if banos_match: banos = int(banos_match.group(1))
+
+    tiene_ascensor = "Sí" if re.search(r'\bAscensor\b', clean_text, re.IGNORECASE) else "No"
+    tiene_garaje = "Sí" if re.search(r'\b(?:Garaje|Parking|Aparcamiento)\b', clean_text, re.IGNORECASE) else "No"
+    tiene_piscina = "Sí" if re.search(r'\bPiscina\b', clean_text, re.IGNORECASE) else "No"
     
-    # En GitHub actions, el path de Chrome puede variar o requerir versión específica
-    # uc.Chrome se encarga de descargar el binario parchado automáticamente
+    terraza_m2 = 0
+    terraza_match = re.search(r'Terraza[^\d]*(\d{1,3})\s*m', clean_text, re.IGNORECASE)
+    if terraza_match: terraza_m2 = int(terraza_match.group(1))
+    tiene_terraza = "Sí" if terraza_m2 > 0 or re.search(r'\bTerraza\b', clean_text, re.IGNORECASE) else "No"
+
+    tipo_prop = "Piso"
+    if re.search(r'\b(?:Terreno|Parcela|Solar|Ruina|Finca|Chalet)\b', title + " " + clean_text, re.IGNORECASE):
+        tipo_prop = "Terreno"
+
+    precio_est = price_override
+    if precio_est == 0:
+        precio_match = re.search(r'Precio\s*[:\n]\s*(\d{1,3}[\.,]?\d{3})', clean_text, re.IGNORECASE)
+        if precio_match:
+            try: precio_est = int(precio_match.group(1).replace('.', '').replace(',', ''))
+            except: pass
+        else:
+            precios = re.findall(r'(\d{2,3}[\.,]?\d{3})\s*[€|euros]', clean_text, re.IGNORECASE)
+            if precios:
+                try: precio_est = int(precios[0].replace('.', '').replace(',', ''))
+                except: pass
+
+    if "|" in title: title = title.split("|")[0].strip()
+
+    return {
+        "ID": f"AUT_{uuid.uuid4().hex[:8]}",
+        "Tipo_Propiedad": tipo_prop,
+        "Fecha_Extraccion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "Origen": domain,
+        "URL": url,
+        "Titulo": title.strip()[:100],
+        "Precio": precio_est,
+        "Ubicacion": "Desconocida", # Se actualizará por IA o revisión manual
+        "Metros": metros,
+        "Habitaciones": habs if habs > 0 else "",
+        "Baños": banos if banos > 0 else "",
+        "Antigüedad": "",
+        "Ascensor": tiene_ascensor,
+        "Garaje": tiene_garaje,
+        "Piscina": tiene_piscina,
+        "Terraza": tiene_terraza,
+        "Terraza_Metros": terraza_m2 if terraza_m2 > 0 else "",
+        "Caracteristicas": "",
+        "Notas": "Extraído automáticamente",
+        "Imagen": ""
+    }
+
+def scrape_pisos_com():
+    print("Iniciando scraping de pisos.com...")
+    properties = []
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     try:
-        driver = uc.Chrome(options=options)
-        return driver
+        url = "https://www.pisos.com/venta/pisos-elche_elx/"
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            # En pisos.com los anuncios suelen estar en divs con clases específicas, pero podemos buscar enlaces
+            links = soup.find_all('a', href=re.compile(r'/comprar/.*-elche.*'))
+            seen = set()
+            for a in links[:15]: # Limitar a los primeros 15 para no saturar
+                href = "https://www.pisos.com" + a['href']
+                if href in seen: continue
+                seen.add(href)
+                
+                # Para ser rápidos, extraemos texto del contenedor padre si existe, si no, lo dejamos básico
+                parent = a.parent.parent
+                clean_text = parent.get_text(separator=' ') if parent else a.get_text()
+                title = a.get_text(strip=True)
+                
+                prop_data = parse_property_data(href, title, clean_text, "Pisos.com")
+                if prop_data['Precio'] > 0: # Solo si encontró precio válido
+                    properties.append(prop_data)
     except Exception as e:
-        print(f"Error iniciando undetected-chromedriver: {e}")
-        return None
+        print(f"Error en pisos.com: {e}")
+    return properties
 
-def simulate_human_behavior(driver):
-    """Simula comportamiento humano para evitar bloqueos."""
-    time.sleep(random.uniform(2.5, 5.5))
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-    time.sleep(random.uniform(1.0, 3.0))
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-    time.sleep(random.uniform(1.5, 3.5))
-
-def extract_idealista_mock(driver):
-    """
-    Función de extracción (Mock/Ejemplo).
-    NOTA: Idealista tiene un anti-bot Datadome extremadamente agresivo.
-    Para producción, se requiere proxy residencial.
-    Aquí simulamos la estructura de datos extraída.
-    """
-    # En un escenario real:
-    # driver.get("https://www.idealista.com/venta-viviendas/elche-elx-alicante/centro/")
-    # simulate_human_behavior(driver)
-    # html = driver.page_source
-    # from bs4 import BeautifulSoup
-    # soup = BeautifulSoup(html, 'html.parser')
-    
-    print("Simulando extracción de Idealista...")
-    time.sleep(2)
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Datos simulados basados en las categorías requeridas
-    mock_data = [
-        # Cat 1: Piso centro, 250k, 120m2, terraza
-        {
-            "ID": f"ID_{int(time.time())}_1", "Fecha_Extraccion": now, "Origen": "Idealista",
-            "URL": "https://www.idealista.com/inmueble/mock1", "Titulo": "Piso espectacular en centro",
-            "Precio": 250000, "Ubicacion": "Centro", "Metros": 120, "Habitaciones": 3,
-            "Caracteristicas": "Terraza, Ascensor", "Imagen": "https://via.placeholder.com/300x200"
-        },
-        # Cat 2: Terreno a restaurar Raval
-        {
-            "ID": f"ID_{int(time.time())}_2", "Fecha_Extraccion": now, "Origen": "Idealista",
-            "URL": "https://www.idealista.com/inmueble/mock2", "Titulo": "Edificio a restaurar",
-            "Precio": 150000, "Ubicacion": "Raval", "Metros": 300, "Habitaciones": 0,
-            "Caracteristicas": "A restaurar", "Imagen": "https://via.placeholder.com/300x200"
-        },
-        # Ruido: Piso en centro pero pequeño (No debe pasar filtro 1)
-        {
-            "ID": f"ID_{int(time.time())}_3", "Fecha_Extraccion": now, "Origen": "Fotocasa",
-            "URL": "https://www.fotocasa.es/inmueble/mock3", "Titulo": "Pisito coqueto",
-            "Precio": 210000, "Ubicacion": "Centro", "Metros": 70, "Habitaciones": 1,
-            "Caracteristicas": "Balcón", "Imagen": "https://via.placeholder.com/300x200"
-        },
-        # Ruido: Piso muy caro (No debe pasar filtro 1)
-        {
-            "ID": f"ID_{int(time.time())}_4", "Fecha_Extraccion": now, "Origen": "Idealista",
-            "URL": "https://www.idealista.com/inmueble/mock4", "Titulo": "Ático lujo",
-            "Precio": 600000, "Ubicacion": "Centro", "Metros": 150, "Habitaciones": 4,
-            "Caracteristicas": "Terraza enorme", "Imagen": "https://via.placeholder.com/300x200"
-        }
+def scrape_agencias_locales():
+    print("Iniciando scraping de agencias locales (Inmovilla/Genéricas)...")
+    properties = []
+    # Lista de búsquedas de agencias locales
+    urls = [
+        "https://www.varaderoinmobiliaria.com/inmuebles/elche/venta/",
+        "https://www.inmobiliariabh.com/propiedades/elche/venta/",
+        "https://www.mmelche.com/inmuebles/elche/venta/"
     ]
-    return mock_data
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    
+    for url in urls:
+        try:
+            domain = url.split("//")[1].split("/")[0].replace("www.", "")
+            res = requests.get(url, headers=headers, timeout=10)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, 'html.parser')
+                links = soup.find_all('a', href=re.compile(r'.*cod=\d+.*'))
+                seen = set()
+                for a in links[:5]: # 5 propiedades por agencia
+                    href = a['href']
+                    if not href.startswith("http"):
+                        href = f"https://{domain}{href}" if href.startswith("/") else f"https://{domain}/{href}"
+                    
+                    if href in seen: continue
+                    seen.add(href)
+                    
+                    # Para sacar datos precisos, entramos a la ficha
+                    try:
+                        ficha_res = requests.get(href, headers=headers, timeout=5)
+                        if ficha_res.status_code == 200:
+                            f_soup = BeautifulSoup(ficha_res.text, 'html.parser')
+                            clean_text = f_soup.get_text(separator=' ')
+                            title = f_soup.title.string if f_soup.title else "Propiedad"
+                            prop_data = parse_property_data(href, title, clean_text, domain.capitalize())
+                            if prop_data['Precio'] > 0:
+                                properties.append(prop_data)
+                    except: pass
+        except Exception as e:
+            print(f"Error en {url}: {e}")
+    return properties
 
 def run_scraper():
-    """Ejecuta el scraping y guarda en Raw_Data."""
-    print("Iniciando tarea de Scraping (20:00)...")
+    """Ejecuta el scraping automatizado y guarda en Raw_Data."""
+    print("Iniciando tarea de Scraping Diario...")
     sheet = get_google_sheet()
     if not sheet: return
     ensure_worksheets(sheet)
     
-    # driver = setup_driver()
-    # if not driver: return
-    
-    # data = extract_idealista_mock(driver)
-    data = extract_idealista_mock(None) # Usando mock sin driver para evitar fallos locales si no hay chrome instalado
+    data = []
+    data.extend(scrape_pisos_com())
+    data.extend(scrape_agencias_locales())
     
     if data:
         raw_ws = sheet.worksheet("Raw_Data")
-        rows_to_insert = [list(d.values()) for d in data]
+        
+        # Asegurarnos de que tienen exactamente los headers de NEW_HEADERS
+        rows_to_insert = []
+        for d in data:
+            row = [d.get(h, "") for h in NEW_HEADERS]
+            rows_to_insert.append(row)
+            
         raw_ws.append_rows(rows_to_insert)
         print(f"Se han insertado {len(rows_to_insert)} filas en Raw_Data.")
-    
-    # if driver: driver.quit()
+    else:
+        print("No se extrajeron datos hoy.")
 
 # --- FILTERING LOGIC ---
 def is_cat_1(row):

@@ -34,16 +34,28 @@ def get_google_sheet():
 
     if not creds_json or not sheet_url:
         print("Error: GOOGLE_CREDENTIALS_JSON o GOOGLE_SHEET_URL no están definidos.")
+        try:
+            import streamlit as st
+            st.error("Faltan Credenciales de Google o URL en los Secretos.")
+        except: pass
         return None
 
     try:
-        creds_dict = json.loads(creds_json)
+        if isinstance(creds_json, str):
+            creds_dict = json.loads(creds_json)
+        else:
+            creds_dict = creds_json # Si ya es un dict de st.secrets
+            
         credentials = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
         client = gspread.authorize(credentials)
         sheet = client.open_by_url(sheet_url)
         return sheet
     except Exception as e:
         print(f"Error conectando a Google Sheets: {e}")
+        try:
+            import streamlit as st
+            st.error(f"Error al conectar con Google Sheets: {e}")
+        except: pass
         return None
 
 def ensure_worksheets(sheet):

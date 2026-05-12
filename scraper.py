@@ -59,18 +59,31 @@ def get_google_sheet():
         except: pass
         return None
 
+NEW_HEADERS = ["ID", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Antigüedad", "Ascensor", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
+
 def ensure_worksheets(sheet):
     """Asegura que las pestañas necesarias existen."""
     required_sheets = ["Raw_Data", "Preselection", "Approved"]
     existing_sheets = [ws.title for ws in sheet.worksheets()]
     
-    headers = ["ID", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Caracteristicas", "Imagen"]
-    
     for req in required_sheets:
         if req not in existing_sheets:
             print(f"Creando pestaña: {req}")
-            ws = sheet.add_worksheet(title=req, rows="1000", cols="20")
-            ws.append_row(headers)
+            ws = sheet.add_worksheet(title=req, rows="1000", cols="30")
+            ws.append_row(NEW_HEADERS)
+        else:
+            try:
+                ws = sheet.worksheet(req)
+                headers = ws.row_values(1)
+                # Si las cabeceras son menos o diferentes, actualizamos la fila 1
+                # En Preselection puede haber "Categoria_Detectada" extra, pero debe empezar por NEW_HEADERS
+                if len(headers) < len(NEW_HEADERS) or headers[:len(NEW_HEADERS)] != NEW_HEADERS:
+                    cell_list = ws.range(1, 1, 1, len(NEW_HEADERS))
+                    for i, val in enumerate(NEW_HEADERS):
+                        cell_list[i].value = val
+                    ws.update_cells(cell_list)
+            except Exception as e:
+                print(f"Error comprobando cabeceras en {req}: {e}")
 
 # --- SCRAPING LOGIC ---
 def setup_driver():

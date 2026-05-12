@@ -1,9 +1,0 @@
-streamlit==1.32.0
-gspread==6.1.0
-google-auth==2.29.0
-pandas==2.2.1
-undetected-chromedriver==3.5.5
-beautifulsoup4==4.12.3
-plotly==5.20.0
-requests==2.31.0
-python-dotenv==1.0.1

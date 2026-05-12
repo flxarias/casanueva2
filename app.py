@@ -73,7 +73,7 @@ def append_to_approved(data_dict):
     try:
         headers = ws.row_values(1)
         if not headers:
-            headers = ["ID", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Antigüedad", "Ascensor", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
+            headers = ["ID", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
             ws.append_row(headers)
         new_row = [data_dict.get(h, "") for h in headers]
         ws.append_row(new_row)
@@ -184,8 +184,10 @@ def main():
                             terraza_m2 = int(terraza_match.group(1)) if terraza_match else 0
                             tiene_terraza = True if terraza_m2 > 0 or re.search(r'\bTerraza\b', clean_text, re.IGNORECASE) else False
 
-                            # Ascensor
+                            # Ascensor, Garaje, Piscina
                             tiene_ascensor = bool(re.search(r'\bAscensor\b', clean_text, re.IGNORECASE))
+                            tiene_garaje = bool(re.search(r'\b(?:Garaje|Parking|Aparcamiento)\b', clean_text, re.IGNORECASE))
+                            tiene_piscina = bool(re.search(r'\bPiscina\b', clean_text, re.IGNORECASE))
                             
                             # Precio
                             precio_est = 0
@@ -210,6 +212,8 @@ def main():
                             st.session_state['ext_terraza'] = tiene_terraza
                             st.session_state['ext_terraza_m2'] = terraza_m2
                             st.session_state['ext_ascensor'] = tiene_ascensor
+                            st.session_state['ext_garaje'] = tiene_garaje
+                            st.session_state['ext_piscina'] = tiene_piscina
                             st.session_state['ext_origen'] = domain
                             st.session_state['ext_url'] = url_input
                             st.success("✅ Datos extraídos. Por favor, revisa el formulario abajo.")
@@ -246,9 +250,11 @@ def main():
                 url = st.text_input("URL del Anuncio", value=st.session_state.get('ext_url', ''))
             with col3:
                 ascensor = st.checkbox("Tiene Ascensor", value=st.session_state.get('ext_ascensor', False))
+                garaje = st.checkbox("Tiene Garaje/Parking", value=st.session_state.get('ext_garaje', False))
+                piscina = st.checkbox("Tiene Piscina", value=st.session_state.get('ext_piscina', False))
                 terraza = st.checkbox("Tiene Terraza/Balcón", value=st.session_state.get('ext_terraza', False))
                 terraza_m2 = st.number_input("Metros de Terraza", min_value=0, step=1, value=st.session_state.get('ext_terraza_m2', 0))
-                caracteristicas = st.text_area("Otras Características (ej. Garaje, Piscina)")
+                caracteristicas = st.text_area("Otras Características")
                 notas = st.text_area("Notas / Valoración cualitativa")
             
             submit = st.form_submit_button("Guardar Propiedad")
@@ -280,7 +286,7 @@ def main():
                         st.success("Propiedad guardada exitosamente en la base de datos.")
                         st.balloons()
                         # Limpiar variables de sesion
-                        for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_origen', 'ext_url']:
+                        for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_garaje', 'ext_piscina', 'ext_origen', 'ext_url']:
                             if k in st.session_state: del st.session_state[k]
                     else:
                         st.error("❌ No se pudo guardar la propiedad. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")

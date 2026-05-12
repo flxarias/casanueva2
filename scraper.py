@@ -20,12 +20,20 @@ SCOPES = [
 
 def get_google_sheet():
     """Conecta a Google Sheets y devuelve el objeto del documento."""
-    # Intentar obtener credenciales de variable de entorno (formato JSON como string, usado en GitHub Actions/Streamlit)
+    # Intentar obtener credenciales de variable de entorno (formato JSON como string)
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     sheet_url = os.environ.get("GOOGLE_SHEET_URL")
     
     if not creds_json or not sheet_url:
-        print("Error: GOOGLE_CREDENTIALS_JSON o GOOGLE_SHEET_URL no están definidos en las variables de entorno.")
+        try:
+            import streamlit as st
+            creds_json = st.secrets.get("GOOGLE_CREDENTIALS_JSON")
+            sheet_url = st.secrets.get("GOOGLE_SHEET_URL")
+        except:
+            pass
+
+    if not creds_json or not sheet_url:
+        print("Error: GOOGLE_CREDENTIALS_JSON o GOOGLE_SHEET_URL no están definidos.")
         return None
 
     try:

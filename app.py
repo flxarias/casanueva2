@@ -73,7 +73,7 @@ def append_to_approved(data_dict):
     try:
         headers = ws.row_values(1)
         if not headers:
-            headers = ["ID", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Caracteristicas", "Imagen"]
+            headers = ["ID", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Antigüedad", "Ascensor", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
             ws.append_row(headers)
         new_row = [data_dict.get(h, "") for h in headers]
         ws.append_row(new_row)
@@ -154,25 +154,42 @@ def main():
                             soup = BeautifulSoup(res.text, 'html.parser')
                             title = soup.title.string if soup.title else "Anuncio Extraído"
                             
+                            import urllib.parse
+                            domain = urllib.parse.urlparse(url_input).netloc.replace('www.', '').split('.')[0].capitalize()
+                            
                             # Extraer texto limpio
                             text_lines = soup.get_text(separator='\n').split('\n')
                             clean_text = '\n'.join([line.strip() for line in text_lines if line.strip()])
                             
                             # Habitaciones
-                            habs_match = re.search(r'Habitaciones\s*:\s*(\d+)', clean_text, re.IGNORECASE)
+                            habs_match = re.search(r'(?:Habitaciones|Dormitorios)\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
                             if not habs_match:
-                                habs_match = re.search(r'(\d+)\s*Habitaciones', clean_text, re.IGNORECASE)
+                                habs_match = re.search(r'(\d+)\s*(?:Habitaciones|Dormitorios)', clean_text, re.IGNORECASE)
                             habs = int(habs_match.group(1)) if habs_match else 0
                             
+                            # Baños
+                            banos_match = re.search(r'Baños\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
+                            if not banos_match:
+                                banos_match = re.search(r'(\d+)\s*Baños', clean_text, re.IGNORECASE)
+                            banos = int(banos_match.group(1)) if banos_match else 0
+
                             # Metros
-                            metros_match = re.search(r'(?:Útiles|Construidos|Superficie)\s*:\s*(\d+)', clean_text, re.IGNORECASE)
+                            metros_match = re.search(r'(?:Útiles|Construidos|Superficie)\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
                             if not metros_match:
                                 metros_match = re.search(r'(\d+)\s*m[2²]', clean_text, re.IGNORECASE)
                             metros = int(metros_match.group(1)) if metros_match else 0
                             
+                            # Terraza
+                            terraza_match = re.search(r'Terraza\s*[:\n]\s*(\d+)', clean_text, re.IGNORECASE)
+                            terraza_m2 = int(terraza_match.group(1)) if terraza_match else 0
+                            tiene_terraza = True if terraza_m2 > 0 or re.search(r'\bTerraza\b', clean_text, re.IGNORECASE) else False
+
+                            # Ascensor
+                            tiene_ascensor = bool(re.search(r'\bAscensor\b', clean_text, re.IGNORECASE))
+                            
                             # Precio
                             precio_est = 0
-                            precio_match = re.search(r'Precio\s*:\s*(\d{1,3}[\.,]?\d{3})', clean_text, re.IGNORECASE)
+                            precio_match = re.search(r'Precio\s*[:\n]\s*(\d{1,3}[\.,]?\d{3})', clean_text, re.IGNORECASE)
                             if precio_match:
                                 try: precio_est = int(precio_match.group(1).replace('.', '').replace(',', ''))
                                 except: pass
@@ -189,8 +206,13 @@ def main():
                             st.session_state['ext_precio'] = precio_est
                             st.session_state['ext_metros'] = metros
                             st.session_state['ext_habs'] = habs
+                            st.session_state['ext_banos'] = banos
+                            st.session_state['ext_terraza'] = tiene_terraza
+                            st.session_state['ext_terraza_m2'] = terraza_m2
+                            st.session_state['ext_ascensor'] = tiene_ascensor
+                            st.session_state['ext_origen'] = domain
                             st.session_state['ext_url'] = url_input
-                            st.success("✅ Algunos datos extraídos. Por favor, revisa el formulario abajo.")
+                            st.success("✅ Datos extraídos. Por favor, revisa el formulario abajo.")
                         else:
                             st.warning(f"⚠️ El servidor devolvió el código {res.status_code}")
                     except Exception as e:
@@ -200,17 +222,34 @@ def main():
         st.subheader("Formulario Manual")
         
         with st.form("manual_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 titulo = st.text_input("Título del Anuncio *", value=st.session_state.get('ext_titulo', ''))
                 precio = st.number_input("Precio (€) *", min_value=0, step=1000, value=st.session_state.get('ext_precio', 0))
                 metros = st.number_input("Metros Cuadrados *", min_value=0, step=5, value=st.session_state.get('ext_metros', 0))
                 habitaciones = st.number_input("Habitaciones", min_value=0, step=1, value=st.session_state.get('ext_habs', 0))
+                banos = st.number_input("Baños", min_value=0, step=1, value=st.session_state.get('ext_banos', 0))
             with col2:
+                antiguedad = st.number_input("Antigüedad (Año)", min_value=1800, max_value=2030, step=1, value=0, help="0 si es desconocido")
                 ubicacion = st.selectbox("Ubicación", ["Centro", "Raval", "Altabix", "Carrús", "Sector 5", "Otro"])
-                origen = st.selectbox("Origen", ["Idealista", "Fotocasa", "Agencia Local", "Offline", "Otro"])
+                
+                # Autodetect origen logic
+                origen_opts = ["Idealista", "Fotocasa", "Agencia Local", "Offline", "Otro"]
+                default_origen = st.session_state.get('ext_origen', '')
+                if default_origen and default_origen not in origen_opts:
+                    origen_opts.insert(0, default_origen)
+                    origen_idx = 0
+                else:
+                    origen_idx = origen_opts.index(default_origen) if default_origen in origen_opts else 2
+                origen = st.selectbox("Origen", origen_opts, index=origen_idx)
+                
                 url = st.text_input("URL del Anuncio", value=st.session_state.get('ext_url', ''))
-                caracteristicas = st.text_area("Características (ej. Terraza, Ascensor)")
+            with col3:
+                ascensor = st.checkbox("Tiene Ascensor", value=st.session_state.get('ext_ascensor', False))
+                terraza = st.checkbox("Tiene Terraza/Balcón", value=st.session_state.get('ext_terraza', False))
+                terraza_m2 = st.number_input("Metros de Terraza", min_value=0, step=1, value=st.session_state.get('ext_terraza_m2', 0))
+                caracteristicas = st.text_area("Otras Características (ej. Garaje, Piscina)")
+                notas = st.text_area("Notas / Valoración cualitativa")
             
             submit = st.form_submit_button("Guardar Propiedad")
             
@@ -228,18 +267,21 @@ def main():
                         "Ubicacion": ubicacion,
                         "Metros": metros,
                         "Habitaciones": habitaciones,
+                        "Baños": banos,
+                        "Antigüedad": antiguedad if antiguedad > 0 else "",
+                        "Ascensor": "Sí" if ascensor else "No",
+                        "Terraza": "Sí" if terraza else "No",
+                        "Terraza_Metros": terraza_m2 if terraza_m2 > 0 else "",
                         "Caracteristicas": caracteristicas,
+                        "Notas": notas,
                         "Imagen": ""
                     }
                     if append_to_approved(new_data):
                         st.success("Propiedad guardada exitosamente en la base de datos.")
                         st.balloons()
                         # Limpiar variables de sesion
-                        if 'ext_titulo' in st.session_state: del st.session_state['ext_titulo']
-                        if 'ext_precio' in st.session_state: del st.session_state['ext_precio']
-                        if 'ext_metros' in st.session_state: del st.session_state['ext_metros']
-                        if 'ext_habs' in st.session_state: del st.session_state['ext_habs']
-                        if 'ext_url' in st.session_state: del st.session_state['ext_url']
+                        for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_origen', 'ext_url']:
+                            if k in st.session_state: del st.session_state[k]
                     else:
                         st.error("❌ No se pudo guardar la propiedad. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")
 

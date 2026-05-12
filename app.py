@@ -73,7 +73,7 @@ def append_to_approved(data_dict):
     try:
         headers = ws.row_values(1)
         if not headers:
-            headers = ["ID", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
+            headers = ["ID", "Tipo_Propiedad", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
             ws.append_row(headers)
         new_row = [data_dict.get(h, "") for h in headers]
         ws.append_row(new_row)
@@ -189,6 +189,11 @@ def main():
                             tiene_garaje = bool(re.search(r'\b(?:Garaje|Parking|Aparcamiento)\b', clean_text, re.IGNORECASE))
                             tiene_piscina = bool(re.search(r'\bPiscina\b', clean_text, re.IGNORECASE))
                             
+                            # Tipo de Propiedad Guess
+                            tipo_prop = "Piso"
+                            if re.search(r'\b(?:Terreno|Parcela|Solar|Ruina|Finca|Chalet)\b', title + " " + clean_text, re.IGNORECASE):
+                                tipo_prop = "Terreno"
+                            
                             # Precio
                             precio_est = 0
                             precio_match = re.search(r'Precio\s*[:\n]\s*(\d{1,3}[\.,]?\d{3})', clean_text, re.IGNORECASE)
@@ -216,6 +221,7 @@ def main():
                             st.session_state['ext_piscina'] = tiene_piscina
                             st.session_state['ext_origen'] = domain
                             st.session_state['ext_url'] = url_input
+                            st.session_state['ext_tipo'] = tipo_prop
                             st.success("✅ Datos extraídos. Por favor, revisa el formulario abajo.")
                         else:
                             st.warning(f"⚠️ El servidor devolvió el código {res.status_code}")
@@ -225,71 +231,96 @@ def main():
         st.divider()
         st.subheader("Formulario Manual")
         
-        with st.form("manual_form", clear_on_submit=True):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                titulo = st.text_input("Título del Anuncio *", value=st.session_state.get('ext_titulo', ''))
-                precio = st.number_input("Precio (€) *", min_value=0, step=1000, value=st.session_state.get('ext_precio', 0))
-                metros = st.number_input("Metros Cuadrados *", min_value=0, step=5, value=st.session_state.get('ext_metros', 0))
-                habitaciones = st.number_input("Habitaciones", min_value=0, step=1, value=st.session_state.get('ext_habs', 0))
-                banos = st.number_input("Baños", min_value=0, step=1, value=st.session_state.get('ext_banos', 0))
-            with col2:
-                antiguedad = st.number_input("Antigüedad (Año)", min_value=0, max_value=2030, step=1, value=0, help="0 si es desconocido")
-                ubicacion = st.selectbox("Ubicación", ["Centro", "Raval", "Altabix", "Carrús", "Sector 5", "Otro"])
-                
-                # Autodetect origen logic
-                origen_opts = ["Idealista", "Fotocasa", "Agencia Local", "Offline", "Otro"]
-                default_origen = st.session_state.get('ext_origen', '')
-                if default_origen and default_origen not in origen_opts:
-                    origen_opts.insert(0, default_origen)
-                    origen_idx = 0
-                else:
+        # Helper para autodetectar origen
+        origen_opts = ["Idealista", "Fotocasa", "Agencia Local", "Offline", "Otro"]
+        default_origen = st.session_state.get('ext_origen', '')
+        if default_origen and default_origen not in origen_opts:
+            origen_opts.insert(0, default_origen)
+        
+        tab_piso, tab_terreno = st.tabs(["🏢 Piso Centro", "🏞️ Terreno / Ruina"])
+        
+        with tab_piso:
+            with st.form("manual_form_piso", clear_on_submit=True):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    titulo = st.text_input("Título del Anuncio *", value=st.session_state.get('ext_titulo', ''))
+                    precio = st.number_input("Precio (€) *", min_value=0, step=1000, value=st.session_state.get('ext_precio', 0))
+                    metros = st.number_input("Metros Cuadrados *", min_value=0, step=5, value=st.session_state.get('ext_metros', 0))
+                    habitaciones = st.number_input("Habitaciones", min_value=0, step=1, value=st.session_state.get('ext_habs', 0))
+                    banos = st.number_input("Baños", min_value=0, step=1, value=st.session_state.get('ext_banos', 0))
+                with col2:
+                    antiguedad = st.number_input("Antigüedad (Año)", min_value=0, max_value=2030, step=1, value=0, help="0 si es desconocido")
+                    ubicacion = st.selectbox("Ubicación", ["Centro", "Raval", "Altabix", "Carrús", "Sector 5", "Otro"])
                     origen_idx = origen_opts.index(default_origen) if default_origen in origen_opts else 2
-                origen = st.selectbox("Origen", origen_opts, index=origen_idx)
+                    origen = st.selectbox("Origen", origen_opts, index=origen_idx)
+                    url = st.text_input("URL del Anuncio", value=st.session_state.get('ext_url', ''))
+                with col3:
+                    ascensor = st.checkbox("Tiene Ascensor", value=st.session_state.get('ext_ascensor', False))
+                    garaje = st.checkbox("Tiene Garaje/Parking", value=st.session_state.get('ext_garaje', False))
+                    piscina = st.checkbox("Tiene Piscina", value=st.session_state.get('ext_piscina', False))
+                    terraza = st.checkbox("Tiene Terraza/Balcón", value=st.session_state.get('ext_terraza', False))
+                    terraza_m2 = st.number_input("Metros de Terraza", min_value=0, step=1, value=st.session_state.get('ext_terraza_m2', 0))
+                    caracteristicas = st.text_area("Otras Características")
+                    notas = st.text_area("Notas / Valoración cualitativa")
                 
-                url = st.text_input("URL del Anuncio", value=st.session_state.get('ext_url', ''))
-            with col3:
-                ascensor = st.checkbox("Tiene Ascensor", value=st.session_state.get('ext_ascensor', False))
-                garaje = st.checkbox("Tiene Garaje/Parking", value=st.session_state.get('ext_garaje', False))
-                piscina = st.checkbox("Tiene Piscina", value=st.session_state.get('ext_piscina', False))
-                terraza = st.checkbox("Tiene Terraza/Balcón", value=st.session_state.get('ext_terraza', False))
-                terraza_m2 = st.number_input("Metros de Terraza", min_value=0, step=1, value=st.session_state.get('ext_terraza_m2', 0))
-                caracteristicas = st.text_area("Otras Características")
-                notas = st.text_area("Notas / Valoración cualitativa")
-            
-            submit = st.form_submit_button("Guardar Propiedad")
-            
-            if submit:
-                if not titulo or precio == 0 or metros == 0:
-                    st.error("Por favor, rellena los campos obligatorios (*)")
-                else:
-                    new_data = {
-                        "ID": f"MAN_{uuid.uuid4().hex[:8]}",
-                        "Fecha_Extraccion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "Origen": origen,
-                        "URL": url,
-                        "Titulo": titulo,
-                        "Precio": precio,
-                        "Ubicacion": ubicacion,
-                        "Metros": metros,
-                        "Habitaciones": habitaciones,
-                        "Baños": banos,
-                        "Antigüedad": antiguedad if antiguedad > 0 else "",
-                        "Ascensor": "Sí" if ascensor else "No",
-                        "Terraza": "Sí" if terraza else "No",
-                        "Terraza_Metros": terraza_m2 if terraza_m2 > 0 else "",
-                        "Caracteristicas": caracteristicas,
-                        "Notas": notas,
-                        "Imagen": ""
-                    }
-                    if append_to_approved(new_data):
-                        st.success("Propiedad guardada exitosamente en la base de datos.")
-                        st.balloons()
-                        # Limpiar variables de sesion
-                        for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_garaje', 'ext_piscina', 'ext_origen', 'ext_url']:
-                            if k in st.session_state: del st.session_state[k]
+                submit_piso = st.form_submit_button("Guardar Piso")
+                
+                if submit_piso:
+                    if not titulo or precio == 0 or metros == 0:
+                        st.error("Por favor, rellena los campos obligatorios (*)")
                     else:
-                        st.error("❌ No se pudo guardar la propiedad. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")
+                        new_data = {
+                            "ID": f"MAN_{uuid.uuid4().hex[:8]}", "Tipo_Propiedad": "Piso",
+                            "Fecha_Extraccion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Origen": origen, "URL": url, "Titulo": titulo, "Precio": precio, "Ubicacion": ubicacion,
+                            "Metros": metros, "Habitaciones": habitaciones, "Baños": banos, "Antigüedad": antiguedad if antiguedad > 0 else "",
+                            "Ascensor": "Sí" if ascensor else "No", "Garaje": "Sí" if garaje else "No", "Piscina": "Sí" if piscina else "No",
+                            "Terraza": "Sí" if terraza else "No", "Terraza_Metros": terraza_m2 if terraza_m2 > 0 else "",
+                            "Caracteristicas": caracteristicas, "Notas": notas, "Imagen": ""
+                        }
+                        if append_to_approved(new_data):
+                            st.success("Piso guardado exitosamente.")
+                            st.balloons()
+                            for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_garaje', 'ext_piscina', 'ext_origen', 'ext_url', 'ext_tipo']:
+                                if k in st.session_state: del st.session_state[k]
+                        else: st.error("❌ Error guardando.")
+
+        with tab_terreno:
+            with st.form("manual_form_terreno", clear_on_submit=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    titulo_t = st.text_input("Título del Terreno/Ruina *", value=st.session_state.get('ext_titulo', ''))
+                    precio_t = st.number_input("Precio (€) *", min_value=0, step=1000, value=st.session_state.get('ext_precio', 0), key="prec_t")
+                    metros_t = st.number_input("Metros de Parcela/Superficie *", min_value=0, step=5, value=st.session_state.get('ext_metros', 0), key="met_t")
+                    url_t = st.text_input("URL del Anuncio", value=st.session_state.get('ext_url', ''), key="url_t")
+                with col2:
+                    ubicacion_t = st.selectbox("Ubicación", ["Centro", "Raval", "Altabix", "Carrús", "Sector 5", "Otro"], key="ubi_t")
+                    origen_idx_t = origen_opts.index(default_origen) if default_origen in origen_opts else 2
+                    origen_t = st.selectbox("Origen", origen_opts, index=origen_idx_t, key="ori_t")
+                    caracteristicas_t = st.text_area("Características Especiales (ej. A demoler, Licencia concedida)", key="car_t")
+                    notas_t = st.text_area("Notas / Edificabilidad Máxima", key="not_t")
+                
+                submit_terreno = st.form_submit_button("Guardar Terreno")
+                
+                if submit_terreno:
+                    if not titulo_t or precio_t == 0 or metros_t == 0:
+                        st.error("Por favor, rellena los campos obligatorios (*)")
+                    else:
+                        new_data = {
+                            "ID": f"MAN_{uuid.uuid4().hex[:8]}", "Tipo_Propiedad": "Terreno",
+                            "Fecha_Extraccion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Origen": origen_t, "URL": url_t, "Titulo": titulo_t, "Precio": precio_t, "Ubicacion": ubicacion_t,
+                            "Metros": metros_t, "Habitaciones": "", "Baños": "", "Antigüedad": "",
+                            "Ascensor": "", "Garaje": "", "Piscina": "",
+                            "Terraza": "", "Terraza_Metros": "",
+                            "Caracteristicas": caracteristicas_t, "Notas": notas_t, "Imagen": ""
+                        }
+                        if append_to_approved(new_data):
+                            st.success("Terreno guardado exitosamente.")
+                            st.balloons()
+                            for k in ['ext_titulo', 'ext_precio', 'ext_metros', 'ext_habs', 'ext_banos', 'ext_terraza', 'ext_terraza_m2', 'ext_ascensor', 'ext_garaje', 'ext_piscina', 'ext_origen', 'ext_url', 'ext_tipo']:
+                                if k in st.session_state: del st.session_state[k]
+                        else: st.error("❌ Error guardando. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")
 
     elif choice == "Base de Datos y Análisis":
         st.title("📊 Base de Datos y Análisis")
@@ -299,47 +330,62 @@ def main():
         if df_app.empty:
             st.info("La base de datos está vacía. Aprueba propiedades o añádelas manualmente.")
         else:
-            # Asegurar tipos numéricos para cálculos
-            df_app['Precio'] = pd.to_numeric(df_app['Precio'], errors='coerce')
-            df_app['Metros'] = pd.to_numeric(df_app['Metros'], errors='coerce')
-            df_app['Precio_m2'] = df_app['Precio'] / df_app['Metros']
-            
-            st.subheader("Métricas Clave")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Propiedades", len(df_app))
-            col2.metric("Precio Medio", f"€{df_app['Precio'].mean():,.2f}")
-            col3.metric("Precio Medio / m²", f"€{df_app['Precio_m2'].mean():,.2f}")
-            
-            st.subheader("Tabla de Datos")
-            st.dataframe(df_app, use_container_width=True)
-            
-            # Botón de descarga
-            csv = df_app.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Descargar datos como CSV",
-                data=csv,
-                file_name='propiedades_elche.csv',
-                mime='text/csv',
-            )
-            
-            # Enlace a Google Sheets
-            sheet_url = os.environ.get("GOOGLE_SHEET_URL", "#")
-            st.markdown(f"[🔗 Abrir en Google Sheets]({sheet_url})")
-            
-            st.divider()
-            st.subheader("Dashboard Analítico")
-            
-            col_chart1, col_chart2 = st.columns(2)
-            with col_chart1:
-                # Distribución por ubicación
-                fig_pie = px.pie(df_app, names='Ubicacion', title='Propiedades por Ubicación', hole=0.3)
-                st.plotly_chart(fig_pie, use_container_width=True)
+            if 'Tipo_Propiedad' not in df_app.columns:
+                df_app['Tipo_Propiedad'] = "Piso" # Fallback datos antiguos
                 
-            with col_chart2:
-                # Dispersión Precio vs Superficie
-                fig_scatter = px.scatter(df_app, x='Metros', y='Precio', color='Ubicacion', 
-                                         hover_data=['Titulo'], title='Precio vs Superficie')
-                st.plotly_chart(fig_scatter, use_container_width=True)
+            tipo_filtro = st.radio("Filtrar por tipo:", ["Todos", "Pisos", "Terrenos"], horizontal=True)
+            
+            if tipo_filtro == "Pisos":
+                df_mostrar = df_app[df_app['Tipo_Propiedad'] == 'Piso'].copy()
+            elif tipo_filtro == "Terrenos":
+                df_mostrar = df_app[df_app['Tipo_Propiedad'] == 'Terreno'].copy()
+            else:
+                df_mostrar = df_app.copy()
+                
+            if df_mostrar.empty:
+                st.warning(f"No hay datos para la selección: {tipo_filtro}")
+            else:
+                # Asegurar tipos numéricos para cálculos
+                df_mostrar['Precio'] = pd.to_numeric(df_mostrar['Precio'], errors='coerce')
+                df_mostrar['Metros'] = pd.to_numeric(df_mostrar['Metros'], errors='coerce')
+                df_mostrar['Precio_m2'] = df_mostrar['Precio'] / df_mostrar['Metros']
+                
+                st.subheader("Métricas Clave")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Propiedades", len(df_mostrar))
+                col2.metric("Precio Medio", f"€{df_mostrar['Precio'].mean():,.2f}")
+                col3.metric("Precio Medio / m²", f"€{df_mostrar['Precio_m2'].mean():,.2f}")
+                
+                st.subheader("Tabla de Datos")
+                st.dataframe(df_mostrar, use_container_width=True)
+                
+                # Botón de descarga
+                csv = df_mostrar.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Descargar datos como CSV",
+                    data=csv,
+                    file_name=f'propiedades_{tipo_filtro.lower()}.csv',
+                    mime='text/csv',
+                )
+                
+                # Enlace a Google Sheets
+                sheet_url = os.environ.get("GOOGLE_SHEET_URL", "#")
+                st.markdown(f"[🔗 Abrir en Google Sheets]({sheet_url})")
+                
+                st.divider()
+                st.subheader("Dashboard Analítico")
+                
+                col_chart1, col_chart2 = st.columns(2)
+                with col_chart1:
+                    # Distribución por ubicación
+                    fig_pie = px.pie(df_mostrar, names='Ubicacion', title='Propiedades por Ubicación', hole=0.3)
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                    
+                with col_chart2:
+                    # Dispersión Precio vs Superficie
+                    fig_scatter = px.scatter(df_mostrar, x='Metros', y='Precio', color='Ubicacion', 
+                                             hover_data=['Titulo'], title='Precio vs Superficie')
+                    st.plotly_chart(fig_scatter, use_container_width=True)
 
     elif choice == "Simulador y Comparador":
         st.title("🧮 Simulador y Comparador")
@@ -350,11 +396,23 @@ def main():
             st.warning("Necesitas propiedades en la base de datos para comparar.")
             return
             
-        # Opciones para comparar
-        opciones = df_app['Titulo'] + " (" + df_app['Ubicacion'] + ") - €" + df_app['Precio'].astype(str)
-        df_app['Label'] = opciones
+        if 'Tipo_Propiedad' not in df_app.columns:
+            df_app['Tipo_Propiedad'] = "Piso"
+            
+        tipo_simulador = st.radio("Tipo de Simulación:", ["🏢 Pisos (Reforma)", "🏞️ Terrenos (Obra Nueva)"], horizontal=True)
+        is_terreno = "Terrenos" in tipo_simulador
         
-        seleccionadas = st.multiselect("Selecciona hasta 3 propiedades para comparar", df_app['Label'].tolist(), max_selections=3)
+        df_filtrado = df_app[df_app['Tipo_Propiedad'] == ("Terreno" if is_terreno else "Piso")].copy()
+        
+        if df_filtrado.empty:
+            st.warning("No hay propiedades de este tipo para simular.")
+            return
+            
+        # Opciones para comparar
+        opciones = df_filtrado['Titulo'] + " (" + df_filtrado['Ubicacion'] + ") - €" + df_filtrado['Precio'].astype(str)
+        df_filtrado['Label'] = opciones
+        
+        seleccionadas = st.multiselect("Selecciona hasta 3 propiedades para comparar", df_filtrado['Label'].tolist(), max_selections=3)
         
         if seleccionadas:
             st.subheader("Parámetros de Simulación")
@@ -364,7 +422,12 @@ def main():
             with col_params2:
                 porcentaje_notaria = st.number_input("Notaría/Registro/Gestoría (%)", value=1.5, step=0.1)
             with col_params3:
-                coste_reforma_m2 = st.number_input("Coste Reforma Estimado (€/m²)", value=400, step=50)
+                if is_terreno:
+                    coste_reforma_m2 = st.number_input("Coste Construcción (€/m²)", value=1200, step=100)
+                    coste_licencia_arq = st.number_input("Licencias y Arquitecto (€ est.)", value=30000, step=5000)
+                else:
+                    coste_reforma_m2 = st.number_input("Coste Reforma Estimado (€/m²)", value=400, step=50)
+                    coste_licencia_arq = 0
                 
             st.divider()
             st.subheader("Comparativa")
@@ -372,10 +435,10 @@ def main():
             cols = st.columns(len(seleccionadas))
             
             for i, sel in enumerate(seleccionadas):
-                prop_data = df_app[df_app['Label'] == sel].iloc[0]
+                prop_data = df_filtrado[df_filtrado['Label'] == sel].iloc[0]
                 
                 with cols[i]:
-                    st.markdown(f"### Propiedad {i+1}")
+                    st.markdown(f"### Opción {i+1}")
                     st.markdown(f"**{prop_data['Titulo']}**")
                     
                     precio = float(prop_data['Precio'])
@@ -384,12 +447,16 @@ def main():
                     itp_calc = precio * (porcentaje_itp / 100)
                     notaria_calc = precio * (porcentaje_notaria / 100)
                     reforma_calc = metros * coste_reforma_m2
-                    total = precio + itp_calc + notaria_calc + reforma_calc
+                    total = precio + itp_calc + notaria_calc + reforma_calc + coste_licencia_arq
                     
                     st.write(f"- **Precio Compra:** €{precio:,.2f}")
                     st.write(f"- **Impuestos (ITP):** €{itp_calc:,.2f}")
                     st.write(f"- **Gastos Notaría:** €{notaria_calc:,.2f}")
-                    st.write(f"- **Reforma Estimada:** €{reforma_calc:,.2f}")
+                    if is_terreno:
+                        st.write(f"- **Construcción Estimada:** €{reforma_calc:,.2f}")
+                        st.write(f"- **Licencias/Arq:** €{coste_licencia_arq:,.2f}")
+                    else:
+                        st.write(f"- **Reforma Estimada:** €{reforma_calc:,.2f}")
                     st.markdown("---")
                     st.markdown(f"#### **Total Estimado:** €{total:,.2f}")
 

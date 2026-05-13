@@ -109,7 +109,7 @@ def append_to_approved(data_dict):
     try:
         headers = ws.row_values(1)
         if not headers:
-            headers = ["ID", "Tipo_Propiedad", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Planta", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen"]
+            headers = ["ID", "Tipo_Propiedad", "Fecha_Extraccion", "Origen", "URL", "Titulo", "Precio", "Ubicacion", "Metros", "Habitaciones", "Baños", "Planta", "Antigüedad", "Ascensor", "Garaje", "Piscina", "Terraza", "Terraza_Metros", "Caracteristicas", "Notas", "Imagen", "Favorito", "Visitado"]
             ws.append_row(headers)
         new_row = [data_dict.get(h, "") for h in headers]
         ws.append_row(new_row)
@@ -122,7 +122,7 @@ def append_to_approved(data_dict):
 # --- UI COMPONENTS ---
 def main():
     with st.sidebar:
-        st.markdown("<h2 style='text-align: center; color: #1e3a8a; font-weight: 800;'>🏠 Gestor Elche</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; color: #1e3a8a; font-weight: 800;'>🏠 Apartados</h2>", unsafe_allow_html=True)
         choice = option_menu(
             menu_title=None,
             options=["Validación Diaria", "Entrada Manual", "Base de Datos", "Simulador"],
@@ -141,6 +141,9 @@ def main():
     # Comprobar conexión DB al inicio
     if not os.environ.get("GOOGLE_CREDENTIALS_JSON"):
          st.sidebar.error("Faltan Credenciales de Google (Secretos)")
+
+    # Título global en la parte superior de todas las páginas
+    st.markdown("<h2 style='color: #64748b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px;'>Casa nueva de Arias-Brotóns</h2>", unsafe_allow_html=True)
 
     if choice == "Validación Diaria":
         st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>✅ Validación Diaria</h1>", unsafe_allow_html=True)
@@ -241,6 +244,12 @@ def main():
                             st.session_state['ext_origen'] = domain
                             st.session_state['ext_url'] = url_input
                             st.session_state['ext_tipo'] = tipo_prop
+                            
+                            # Limpiar las keys específicas del formulario de terrenos para forzar su actualización
+                            for k in ['fav_t', 'vis_t', 'prec_t', 'met_t', 'url_t', 'ubi_t', 'ori_t', 'car_t', 'not_t']:
+                                if k in st.session_state:
+                                    del st.session_state[k]
+                                    
                             st.success("✅ Datos extraídos. Por favor, revisa el formulario abajo.")
                         else:
                             st.warning(f"⚠️ El servidor devolvió el código {res.status_code}")
@@ -260,6 +269,13 @@ def main():
         
         if tipo_form == "🏢 Piso Centro":
             with st.form("manual_form_piso", clear_on_submit=True):
+                col_fav1, col_fav2 = st.columns(2)
+                with col_fav1:
+                    favorito = st.checkbox("Favorito ⭐")
+                with col_fav2:
+                    visitado = st.checkbox("Visitado 👁️")
+                st.divider()
+                
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     titulo = st.text_input("Título del Anuncio *", value=st.session_state.get('ext_titulo', ''))
@@ -296,7 +312,8 @@ def main():
                             "Metros": metros, "Habitaciones": habitaciones, "Baños": banos, "Planta": planta, "Antigüedad": antiguedad if antiguedad else "",
                             "Ascensor": "Sí" if ascensor else "No", "Garaje": "Sí" if garaje else "No", "Piscina": "Sí" if piscina else "No",
                             "Terraza": "Sí" if terraza else "No", "Terraza_Metros": terraza_m2 if terraza_m2 > 0 else "",
-                            "Caracteristicas": caracteristicas, "Notas": notas, "Imagen": ""
+                            "Caracteristicas": caracteristicas, "Notas": notas, "Imagen": "",
+                            "Favorito": "Sí" if favorito else "No", "Visitado": "Sí" if visitado else "No"
                         }
                         if append_to_approved(new_data):
                             st.success("Piso guardado exitosamente.")
@@ -307,6 +324,13 @@ def main():
 
         elif tipo_form == "🏞️ Terreno / Ruina":
             with st.form("manual_form_terreno", clear_on_submit=True):
+                col_fav1_t, col_fav2_t = st.columns(2)
+                with col_fav1_t:
+                    favorito_t = st.checkbox("Favorito ⭐", key="fav_t")
+                with col_fav2_t:
+                    visitado_t = st.checkbox("Visitado 👁️", key="vis_t")
+                st.divider()
+                
                 col1, col2 = st.columns(2)
                 with col1:
                     titulo_t = st.text_input("Título del Terreno/Ruina *", value=st.session_state.get('ext_titulo', ''))
@@ -333,7 +357,8 @@ def main():
                             "Metros": metros_t, "Habitaciones": "", "Baños": "", "Planta": "", "Antigüedad": "",
                             "Ascensor": "", "Garaje": "", "Piscina": "",
                             "Terraza": "", "Terraza_Metros": "",
-                            "Caracteristicas": caracteristicas_t, "Notas": notas_t, "Imagen": ""
+                            "Caracteristicas": caracteristicas_t, "Notas": notas_t, "Imagen": "",
+                            "Favorito": "Sí" if favorito_t else "No", "Visitado": "Sí" if visitado_t else "No"
                         }
                         if append_to_approved(new_data):
                             st.success("Terreno guardado exitosamente.")
@@ -343,7 +368,7 @@ def main():
                         else: st.error("❌ Error guardando. Comprueba que las credenciales de Google Sheets son correctas en los Secrets.")
 
     elif choice == "Base de Datos":
-        st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>📊 Base de Datos y Análisis</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>📊 Análisis y base de datos</h1>", unsafe_allow_html=True)
         st.markdown("Analiza el mercado inmobiliario de Elche con datos en tiempo real.")
         st.divider()
         
@@ -372,7 +397,7 @@ def main():
                 df_mostrar['Metros'] = pd.to_numeric(df_mostrar['Metros'], errors='coerce')
                 df_mostrar['Precio_m2'] = df_mostrar['Precio'] / df_mostrar['Metros']
                 
-                st.markdown("### ⚡ KPIs del Mercado")
+                st.markdown("### ⚡ Datos clave")
                 col1, col2, col3, col4 = st.columns(4)
                 col1.metric("Propiedades", len(df_mostrar))
                 col2.metric("Precio Medio", f"{df_mostrar['Precio'].mean():,.0f} €".replace(',', '.'))
@@ -380,8 +405,9 @@ def main():
                 col4.metric("Precio/m² Medio", f"{df_mostrar['Precio_m2'].mean():,.0f} €/m²".replace(',', '.'))
                 
                 st.divider()
-                st.markdown("### 📈 Análisis Visual Avanzado")
+                st.markdown("### 📈 Gráficos")
                 
+                # Fila 1: Histograma y Dispersión
                 col_chart1, col_chart2 = st.columns(2)
                 with col_chart1:
                     # Distribución de Precios (Histograma)
@@ -392,15 +418,60 @@ def main():
                     st.plotly_chart(fig_hist, use_container_width=True)
                     
                 with col_chart2:
-                    # Boxplot por Ubicación para ver dispersión y outliers
-                    fig_box = px.box(df_mostrar, x="Ubicacion", y="Precio_m2", 
-                                     title="Precio/m² por Zona (Boxplot)", color="Ubicacion")
-                    fig_box.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', showlegend=False)
-                    st.plotly_chart(fig_box, use_container_width=True)
+                    # Gráfico de Dispersión (Precio vs Metros)
+                    fig_scatter = px.scatter(df_mostrar, x="Metros", y="Precio", color="Ubicacion",
+                                             title="Precio vs Metros (Dispersión)",
+                                             hover_data=["Titulo", "Precio_m2"])
+                    fig_scatter.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_scatter, use_container_width=True)
+                    
+                # Fila 2: Líneas temporales y Gráficos de Sectores
+                col_chart3, col_chart4, col_chart5 = st.columns([2, 1.5, 1.5])
+                with col_chart3:
+                    # Evolución de inserciones por fecha
+                    df_mostrar['Fecha'] = pd.to_datetime(df_mostrar['Fecha_Extraccion'], errors='coerce').dt.date
+                    df_fechas = df_mostrar.groupby('Fecha').size().reset_index(name='Nuevas Propiedades')
+                    fig_line = px.line(df_fechas, x="Fecha", y="Nuevas Propiedades", title="Evolución de Inserciones", markers=True, color_discrete_sequence=['#10b981'])
+                    fig_line.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', yaxis_title="Cantidad", xaxis_title="Fecha")
+                    st.plotly_chart(fig_line, use_container_width=True)
+                    
+                with col_chart4:
+                    # Sectores: Ubicación
+                    fig_pie_ubi = px.pie(df_mostrar, names="Ubicacion", title="Zonas", hole=0.4)
+                    fig_pie_ubi.update_traces(textposition='inside', textinfo='percent+label')
+                    fig_pie_ubi.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
+                    st.plotly_chart(fig_pie_ubi, use_container_width=True)
+                    
+                with col_chart5:
+                    # Sectores: Habitaciones (excluyendo terrenos que no tienen)
+                    df_habs = df_mostrar[df_mostrar['Habitaciones'].astype(str).str.strip() != ""]
+                    if not df_habs.empty:
+                        fig_pie_habs = px.pie(df_habs, names="Habitaciones", title="Habitaciones", hole=0.4, color_discrete_sequence=px.colors.sequential.Teal)
+                        fig_pie_habs.update_traces(textposition='inside', textinfo='percent+label')
+                        fig_pie_habs.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
+                        st.plotly_chart(fig_pie_habs, use_container_width=True)
+                    else:
+                        st.info("Sin datos de habitaciones")
                 
                 st.divider()
-                st.markdown("### 📋 Directorio de Activos")
+                st.markdown("### 📋 Directorio de propiedades")
                 st.dataframe(df_mostrar.astype(str), use_container_width=True, height=300)
+                
+                st.divider()
+                st.markdown("### 🗑️ Eliminar Propiedad")
+                with st.expander("Eliminar una propiedad manualmente de la base de datos"):
+                    if not df_mostrar.empty:
+                        # Crear un diccionario para mostrar nombre legible en el selectbox
+                        opciones_eliminar = dict(zip(df_mostrar['ID'], df_mostrar['Titulo'] + " (" + df_mostrar['ID'] + ")"))
+                        id_a_eliminar = st.selectbox("Selecciona la propiedad a eliminar", options=df_mostrar['ID'], format_func=lambda x: opciones_eliminar.get(x, x))
+                        if st.button("Eliminar Seleccionada", type="primary"):
+                            with st.spinner("Eliminando..."):
+                                if delete_row(id_a_eliminar, "Approved"):
+                                    st.success("Propiedad eliminada correctamente.")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Hubo un problema al eliminar la propiedad.")
                 
                 # Botones de acción alineados
                 col_btn1, col_btn2 = st.columns([1, 4])
@@ -417,8 +488,8 @@ def main():
                     st.markdown(f"<a href='{sheet_url}' target='_blank' style='display: inline-block; padding: 0.5rem 1rem; background-color: #10b981; color: white; border-radius: 0.375rem; text-decoration: none; font-weight: 600;'>🔗 Abrir en Google Sheets</a>", unsafe_allow_html=True)
                 
     elif choice == "Simulador":
-        st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>🧮 Simulador y Comparador Financiero</h1>", unsafe_allow_html=True)
-        st.markdown("Estima todos los costes ocultos (ITP, Notaría, Reformas) de tus opciones favoritas.")
+        st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>🧮 Simulador Avanzado</h1>", unsafe_allow_html=True)
+        st.markdown("Estima la viabilidad de la operación, gastos desglosados y cuotas hipotecarias.")
         st.divider()
         
         df_app = load_data("Approved")
@@ -446,50 +517,130 @@ def main():
         seleccionadas = st.multiselect("Selecciona hasta 3 propiedades para comparar", df_filtrado['Label'].tolist(), max_selections=3)
         
         if seleccionadas:
-            st.subheader("Parámetros de Simulación")
-            col_params1, col_params2, col_params3 = st.columns(3)
-            with col_params1:
-                porcentaje_itp = st.number_input("ITP (%)", value=10.0, step=0.5, help="Impuesto de Transmisiones Patrimoniales (CV es 10%)")
-            with col_params2:
-                porcentaje_notaria = st.number_input("Notaría/Registro/Gestoría (%)", value=1.5, step=0.1)
-            with col_params3:
-                if is_terreno:
-                    coste_reforma_m2 = st.number_input("Coste Construcción (€/m²)", value=1200, step=100)
-                    coste_licencia_arq = st.number_input("Licencias y Arquitecto (€ est.)", value=30000, step=5000)
-                else:
-                    coste_reforma_m2 = st.number_input("Coste Reforma Estimado (€/m²)", value=400, step=50)
-                    coste_licencia_arq = 0
+            st.markdown("### ⚙️ Parámetros de Simulación")
+            
+            tab1, tab2, tab3 = st.tabs(["💳 Financiación", "🏛️ Impuestos y Gastos", "🏗️ Costes Obra/Reforma"])
+            
+            with tab1:
+                col_f1, col_f2, col_f3 = st.columns(3)
+                ahorro_inicial = col_f1.number_input("Aportación inicial (Ahorros €)", min_value=0, value=30000, step=5000)
+                plazo_anos = col_f2.slider("Plazo de la hipoteca (Años)", min_value=5, max_value=40, value=30, step=1)
+                tipo_interes = col_f3.number_input("Tipo de Interés Anual (%)", min_value=0.0, value=2.95, step=0.1)
                 
+            with tab2:
+                col_g1, col_g2, col_g3 = st.columns(3)
+                if is_terreno:
+                    porcentaje_impuesto = col_g1.number_input("IVA Terreno (%)", value=21.0, step=1.0)
+                else:
+                    porcentaje_impuesto = col_g1.number_input("ITP (%)", value=10.0, step=0.5, help="10% general en Com. Valenciana")
+                
+                notaria_base = col_g2.number_input("Coste Notaría y Registro estimado (€)", value=1200, step=100)
+                gestoria_tasacion = col_g3.number_input("Gestoría y Tasación (€)", value=800, step=100)
+                
+            with tab3:
+                col_o1, col_o2, col_o3 = st.columns(3)
+                if is_terreno:
+                    coste_reforma_m2 = col_o1.number_input("Coste Ejecución Material (€/m²)", value=1200, step=50)
+                    honorarios_tec = col_o2.number_input("Honorarios Arquitecto/Aparejador (€)", value=18000, step=1000)
+                    porcentaje_licencias = col_o3.number_input("Licencias Municipales (%)", value=4.0, step=0.5, help="Sobre el coste de ejecución")
+                    iva_obra = col_o1.number_input("IVA de Construcción (%)", value=10.0, step=1.0)
+                else:
+                    coste_reforma_m2 = col_o1.number_input("Presupuesto de Reforma (€/m²)", value=400, step=50)
+                    honorarios_tec = 0
+                    porcentaje_licencias = col_o2.number_input("Licencia Obra Menor (%)", value=4.0, step=0.5)
+                    iva_obra = col_o3.number_input("IVA Reforma (%)", value=10.0, step=1.0)
+                    
             st.divider()
-            st.subheader("Comparativa")
+            st.markdown("### 📊 Resultados de la Comparativa")
             
             cols = st.columns(len(seleccionadas))
+            
+            nombres_props = []
+            compra_vals = []
+            impuestos_vals = []
+            reforma_vals = []
+            intereses_vals = []
             
             for i, sel in enumerate(seleccionadas):
                 prop_data = df_filtrado[df_filtrado['Label'] == sel].iloc[0]
                 
                 with cols[i]:
-                    st.markdown(f"### Opción {i+1}")
-                    st.markdown(f"**{prop_data['Titulo']}**")
+                    st.markdown(f"#### {prop_data['Titulo']}")
                     
                     precio = float(prop_data['Precio'])
                     metros = float(prop_data['Metros'])
                     
-                    itp_calc = precio * (porcentaje_itp / 100)
-                    notaria_calc = precio * (porcentaje_notaria / 100)
-                    reforma_calc = metros * coste_reforma_m2
-                    total = precio + itp_calc + notaria_calc + reforma_calc + coste_licencia_arq
+                    # Impuestos y gastos
+                    impuesto_compra = precio * (porcentaje_impuesto / 100)
+                    gastos_compra = notaria_base + gestoria_tasacion
                     
-                    st.write(f"- **Precio Compra:** €{precio:,.2f}")
-                    st.write(f"- **Impuestos (ITP):** €{itp_calc:,.2f}")
-                    st.write(f"- **Gastos Notaría:** €{notaria_calc:,.2f}")
-                    if is_terreno:
-                        st.write(f"- **Construcción Estimada:** €{reforma_calc:,.2f}")
-                        st.write(f"- **Licencias/Arq:** €{coste_licencia_arq:,.2f}")
+                    # Obra/Reforma
+                    coste_ejecucion = metros * coste_reforma_m2
+                    licencias = coste_ejecucion * (porcentaje_licencias / 100)
+                    iva_obra_calc = coste_ejecucion * (iva_obra / 100)
+                    coste_total_obra = coste_ejecucion + licencias + iva_obra_calc + honorarios_tec
+                    
+                    necesidad_total = precio + impuesto_compra + gastos_compra + coste_total_obra
+                    hipoteca_necesaria = necesidad_total - ahorro_inicial
+                    
+                    # Viabilidad (LTV sobre precio de compra)
+                    ltv = (hipoteca_necesaria / precio) * 100 if precio > 0 else 0
+                    
+                    st.metric("Inversión Total", f"€{necesidad_total:,.0f}")
+                    
+                    if hipoteca_necesaria > 0:
+                        r = (tipo_interes / 100) / 12
+                        n = plazo_anos * 12
+                        if r > 0:
+                            cuota_mensual = hipoteca_necesaria * (r * (1 + r)**n) / ((1 + r)**n - 1)
+                        else:
+                            cuota_mensual = hipoteca_necesaria / n
+                            
+                        intereses_totales = (cuota_mensual * n) - hipoteca_necesaria
+                        
+                        st.metric("Cuota Hipoteca", f"€{cuota_mensual:,.2f} / mes")
+                        
+                        if ltv > 80 and not is_terreno:
+                            st.warning(f"⚠️ Financiación alta (LTV {ltv:.1f}%). Te faltan ahorros para la entrada.")
+                        elif ahorro_inicial < (impuesto_compra + gastos_compra):
+                            st.error(f"❌ Los ahorros no cubren gastos mínimos (Faltan €{(impuesto_compra + gastos_compra - ahorro_inicial):,.0f})")
+                        else:
+                            st.success(f"✅ Operación Viable (LTV: {ltv:.1f}%)")
                     else:
-                        st.write(f"- **Reforma Estimada:** €{reforma_calc:,.2f}")
-                    st.markdown("---")
-                    st.markdown(f"#### **Total Estimado:** €{total:,.2f}")
+                        st.success("✅ Pagado al contado sin hipoteca")
+                        intereses_totales = 0
+                        
+                    with st.expander("Ver desglose detallado"):
+                        st.write(f"- **Precio Inmueble:** €{precio:,.0f}")
+                        st.write(f"- **Impuestos/Gastos:** €{(impuesto_compra + gastos_compra):,.0f}")
+                        st.write(f"- **Reforma/Construcción:** €{coste_total_obra:,.0f}")
+                        if hipoteca_necesaria > 0:
+                            st.write(f"- **Intereses al Banco:** €{intereses_totales:,.0f}")
+                            st.write(f"- **Capital a Financiar:** €{hipoteca_necesaria:,.0f}")
+                            
+                    nombres_props.append(prop_data['Titulo'][:15] + ("..." if len(prop_data['Titulo']) > 15 else ""))
+                    compra_vals.append(precio)
+                    impuestos_vals.append(impuesto_compra + gastos_compra)
+                    reforma_vals.append(coste_total_obra)
+                    intereses_vals.append(intereses_totales)
+
+            if seleccionadas:
+                st.divider()
+                st.markdown("### 📈 Gráfico de Inversión Total")
+                
+                fig = px.bar(
+                    x=nombres_props, 
+                    y=[compra_vals, impuestos_vals, reforma_vals, intereses_vals],
+                    labels={'x': 'Propiedad', 'y': 'Euros (€)'},
+                    title="Distribución de Costes",
+                    barmode="stack",
+                    color_discrete_sequence=['#3b82f6', '#ef4444', '#10b981', '#f59e0b']
+                )
+                
+                newnames = {'wide_variable_0':'Compra', 'wide_variable_1': 'Gastos e Impuestos', 'wide_variable_2': 'Construcción/Reforma', 'wide_variable_3': 'Intereses Banco'}
+                fig.for_each_trace(lambda t: t.update(name = newnames.get(t.name, t.name), legendgroup = newnames.get(t.name, t.name), hovertemplate = t.hovertemplate.replace(t.name, newnames.get(t.name, t.name))))
+
+                st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()

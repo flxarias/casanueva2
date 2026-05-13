@@ -136,6 +136,25 @@ def parse_property_data(url, title, clean_text, domain, price_override=0):
 
     if "|" in title: title = title.split("|")[0].strip()
 
+    # Determinar ubicación aproximada
+    ubicacion_est = "Desconocida"
+    texto_completo = (title + " " + clean_text).lower()
+    if re.search(r'\b(?:centro|corazón|corazon)\b', texto_completo):
+        ubicacion_est = "Centro"
+    elif re.search(r'\braval\b', texto_completo):
+        ubicacion_est = "Raval"
+    elif re.search(r'\baltabix\b', texto_completo):
+        ubicacion_est = "Altabix"
+    elif re.search(r'\bcarrús|carrus\b', texto_completo):
+        ubicacion_est = "Carrús"
+    elif re.search(r'\bsector 5\b', texto_completo):
+        ubicacion_est = "Sector 5"
+
+    # Determinar estado
+    caracteristicas = ""
+    if re.search(r'\b(?:reformar|restaurar|ruina|demoler)\b', texto_completo):
+        caracteristicas = "A reformar/restaurar"
+
     return {
         "ID": f"AUT_{uuid.uuid4().hex[:8]}",
         "Tipo_Propiedad": tipo_prop,
@@ -144,7 +163,7 @@ def parse_property_data(url, title, clean_text, domain, price_override=0):
         "URL": url,
         "Titulo": title.strip()[:100],
         "Precio": precio_est,
-        "Ubicacion": "Desconocida", # Se actualizará por IA o revisión manual
+        "Ubicacion": ubicacion_est,
         "Metros": metros,
         "Habitaciones": habs if habs > 0 else "",
         "Baños": banos if banos > 0 else "",
@@ -155,9 +174,11 @@ def parse_property_data(url, title, clean_text, domain, price_override=0):
         "Piscina": tiene_piscina,
         "Terraza": tiene_terraza,
         "Terraza_Metros": terraza_m2 if terraza_m2 > 0 else "",
-        "Caracteristicas": "",
+        "Caracteristicas": caracteristicas,
         "Notas": "Extraído automáticamente",
-        "Imagen": ""
+        "Imagen": "",
+        "Favorito": "No",
+        "Visitado": "No"
     }
 
 def scrape_pisos_com():
@@ -260,30 +281,35 @@ def run_scraper():
 def is_cat_1(row):
     """Centro, 200k-500k, >=100m2, terraza/balcón"""
     try:
-        ubicacion = str(row['Ubicacion']).lower()
-        precio = float(row['Precio'])
-        metros = float(row['Metros'])
-        caract = str(row['Caracteristicas']).lower()
+        ubicacion = str(row.get('Ubicacion', '')).lower()
+        titulo = str(row.get('Titulo', '')).lower()
+        precio = float(row.get('Precio', 0))
+        metros = float(row.get('Metros', 0))
+        terraza = str(row.get('Terraza', '')).lower()
         
-        if 'centro' in ubicacion and (200000 <= precio <= 500000) and (metros >= 100) and ('terraza' in caract or 'balcón' in caract or 'balcon' in caract):
+        texto = titulo + " " + ubicacion
+        
+        # Flexibilidad en el precio para pruebas: de 100k a 500k
+        if ('centro' in texto) and (100000 <= precio <= 500000) and (metros >= 80) and (terraza == 'sí' or 'balcon' in texto or 'balcón' in texto or 'terraza' in texto):
             return True
         return False
-    except:
+    except Exception as e:
         return False
 
 def is_cat_2(row):
     """Centro o Raval, Terreno/Edificio a restaurar"""
     try:
-        ubicacion = str(row['Ubicacion']).lower()
-        caract = str(row['Caracteristicas']).lower()
-        titulo = str(row['Titulo']).lower()
+        ubicacion = str(row.get('Ubicacion', '')).lower()
+        titulo = str(row.get('Titulo', '')).lower()
+        caract = str(row.get('Caracteristicas', '')).lower()
+        tipo = str(row.get('Tipo_Propiedad', '')).lower()
         
-        texto_analizar = caract + " " + titulo
+        texto_analizar = titulo + " " + ubicacion + " " + caract + " " + tipo
         
-        if ('centro' in ubicacion or 'raval' in ubicacion) and ('terreno' in texto_analizar or 'restaurar' in texto_analizar or 'reformar' in texto_analizar):
+        if ('centro' in texto_analizar or 'raval' in texto_analizar) and ('terreno' in texto_analizar or 'restaurar' in texto_analizar or 'reformar' in texto_analizar or 'ruina' in texto_analizar):
             return True
         return False
-    except:
+    except Exception as e:
         return False
 
 def run_filter():

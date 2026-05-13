@@ -87,6 +87,38 @@ def move_row(row_data, from_sheet_name, to_sheet_name):
         st.error(f"Error moviendo fila: {e}")
         return False
 
+def update_row(row_id, sheet_name, new_data):
+    """Actualiza una fila existente."""
+    sheet = get_google_sheet()
+    if not sheet: return False
+    ws = sheet.worksheet(sheet_name)
+    try:
+        cell = ws.find(row_id)
+        row_idx = cell.row
+        headers = ws.row_values(1)
+        
+        existing_row = ws.row_values(row_idx)
+        while len(existing_row) < len(headers):
+            existing_row.append("")
+            
+        updated_row = []
+        for i, h in enumerate(headers):
+            if h in new_data:
+                updated_row.append(str(new_data[h]))
+            else:
+                updated_row.append(existing_row[i] if i < len(existing_row) else "")
+                
+        cell_list = ws.range(row_idx, 1, row_idx, len(headers))
+        for i, cell_obj in enumerate(cell_list):
+            cell_obj.value = updated_row[i]
+        ws.update_cells(cell_list)
+        
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Error actualizando fila: {e}")
+        return False
+
 def delete_row(row_id, sheet_name):
     """Elimina una fila por ID."""
     sheet = get_google_sheet()
@@ -122,7 +154,7 @@ def append_to_approved(data_dict):
 # --- UI COMPONENTS ---
 def main():
     with st.sidebar:
-        st.markdown("<h2 style='text-align: center; color: #1e3a8a; font-weight: 800;'>🏠 Apartados</h2>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: left; color: #1e3a8a; font-weight: 800; padding-left: 5px;'>📌 Apartados</h3>", unsafe_allow_html=True)
         choice = option_menu(
             menu_title=None,
             options=["Validación Diaria", "Entrada Manual", "Base de Datos", "Simulador"],
@@ -143,7 +175,11 @@ def main():
          st.sidebar.error("Faltan Credenciales de Google (Secretos)")
 
     # Título global en la parte superior de todas las páginas
-    st.markdown("<h2 style='color: #64748b; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 20px;'>Casa nueva de Arias-Brotóns</h2>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style='border-bottom: 3px solid #1e3a8a; padding-bottom: 10px; margin-bottom: 30px;'>
+            <h1 style='color: #1e3a8a; font-size: 3.5rem; font-weight: 900; margin-bottom: 0;'>🏠 Casa nueva de Arias-Brotóns</h1>
+        </div>
+    """, unsafe_allow_html=True)
 
     if choice == "Validación Diaria":
         st.markdown("<h1 style='color: #1e3a8a; font-weight: 800;'>✅ Validación Diaria</h1>", unsafe_allow_html=True)
@@ -269,11 +305,13 @@ def main():
         
         if tipo_form == "🏢 Piso Centro":
             with st.form("manual_form_piso", clear_on_submit=True):
-                col_fav1, col_fav2 = st.columns(2)
+                col_fav1, col_fav2, col_vend = st.columns(3)
                 with col_fav1:
                     favorito = st.checkbox("Favorito ⭐")
                 with col_fav2:
                     visitado = st.checkbox("Visitado 👁️")
+                with col_vend:
+                    vendedor = st.selectbox("Vendedor", ["Particular", "Inmobiliaria"])
                 st.divider()
                 
                 col1, col2, col3 = st.columns(3)
@@ -313,7 +351,8 @@ def main():
                             "Ascensor": "Sí" if ascensor else "No", "Garaje": "Sí" if garaje else "No", "Piscina": "Sí" if piscina else "No",
                             "Terraza": "Sí" if terraza else "No", "Terraza_Metros": terraza_m2 if terraza_m2 > 0 else "",
                             "Caracteristicas": caracteristicas, "Notas": notas, "Imagen": "",
-                            "Favorito": "Sí" if favorito else "No", "Visitado": "Sí" if visitado else "No"
+                            "Favorito": "Sí" if favorito else "No", "Visitado": "Sí" if visitado else "No",
+                            "Vendedor": vendedor
                         }
                         if append_to_approved(new_data):
                             st.success("Piso guardado exitosamente.")
@@ -324,11 +363,13 @@ def main():
 
         elif tipo_form == "🏞️ Terreno / Ruina":
             with st.form("manual_form_terreno", clear_on_submit=True):
-                col_fav1_t, col_fav2_t = st.columns(2)
+                col_fav1_t, col_fav2_t, col_vend_t = st.columns(3)
                 with col_fav1_t:
                     favorito_t = st.checkbox("Favorito ⭐", key="fav_t")
                 with col_fav2_t:
                     visitado_t = st.checkbox("Visitado 👁️", key="vis_t")
+                with col_vend_t:
+                    vendedor_t = st.selectbox("Vendedor", ["Particular", "Inmobiliaria"], key="vend_t")
                 st.divider()
                 
                 col1, col2 = st.columns(2)
@@ -358,7 +399,8 @@ def main():
                             "Ascensor": "", "Garaje": "", "Piscina": "",
                             "Terraza": "", "Terraza_Metros": "",
                             "Caracteristicas": caracteristicas_t, "Notas": notas_t, "Imagen": "",
-                            "Favorito": "Sí" if favorito_t else "No", "Visitado": "Sí" if visitado_t else "No"
+                            "Favorito": "Sí" if favorito_t else "No", "Visitado": "Sí" if visitado_t else "No",
+                            "Vendedor": vendedor_t
                         }
                         if append_to_approved(new_data):
                             st.success("Terreno guardado exitosamente.")
@@ -454,8 +496,64 @@ def main():
                         st.info("Sin datos de habitaciones")
                 
                 st.divider()
-                st.markdown("### 📋 Directorio de propiedades")
-                st.dataframe(df_mostrar.astype(str), use_container_width=True, height=300)
+                st.markdown("### 📋 Directorio de propiedades (Editable)")
+                st.info("Haz doble clic en cualquier celda para editarla. Puedes marcar 'Favorito' o 'Visitado' fácilmente. Luego pulsa en 'Guardar Cambios' para sincronizar.")
+                
+                # Asegurar columnas
+                if 'Favorito' not in df_mostrar.columns:
+                    df_mostrar['Favorito'] = "No"
+                if 'Visitado' not in df_mostrar.columns:
+                    df_mostrar['Visitado'] = "No"
+                    
+                def to_bool(val):
+                    if isinstance(val, bool): return val
+                    if isinstance(val, str): return val.lower() in ['sí', 'si', 'true', '1']
+                    return False
+
+                df_para_editar = df_mostrar.copy()
+                df_para_editar['Favorito'] = df_para_editar['Favorito'].apply(to_bool)
+                df_para_editar['Visitado'] = df_para_editar['Visitado'].apply(to_bool)
+                
+                # Bloquear únicamente el ID (necesario para buscar en Google Sheets)
+                disabled_cols = ["ID"]
+                
+                df_editado = st.data_editor(
+                    df_para_editar,
+                    use_container_width=True, 
+                    height=400,
+                    disabled=disabled_cols
+                )
+                
+                if st.button("💾 Guardar Cambios en Sheets", type="primary"):
+                    with st.spinner("Sincronizando..."):
+                        # Revertir a strings
+                        df_final = df_editado.copy()
+                        df_final['Favorito'] = df_final['Favorito'].apply(lambda x: 'Sí' if x else 'No')
+                        df_final['Visitado'] = df_final['Visitado'].apply(lambda x: 'Sí' if x else 'No')
+                        
+                        df_original = df_mostrar.copy()
+                        df_original['Favorito'] = df_original['Favorito'].apply(lambda x: 'Sí' if to_bool(x) else 'No')
+                        df_original['Visitado'] = df_original['Visitado'].apply(lambda x: 'Sí' if to_bool(x) else 'No')
+                        
+                        cambios_realizados = 0
+                        for i, row in df_final.iterrows():
+                            if i in df_original.index:
+                                orig_row = df_original.loc[i]
+                                differ = False
+                                for col in df_final.columns:
+                                    if str(row[col]) != str(orig_row[col]):
+                                        differ = True
+                                        break
+                                if differ:
+                                    if update_row(row['ID'], "Approved", row.to_dict()):
+                                        cambios_realizados += 1
+                                        
+                        if cambios_realizados > 0:
+                            st.success(f"✅ ¡Se han actualizado {cambios_realizados} propiedades!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.info("No se han detectado cambios.")
                 
                 st.divider()
                 st.markdown("### 🗑️ Eliminar Propiedad")
